@@ -1,0 +1,24 @@
+Geographic data: Natural Earth. Public domain.
+Source: https://github.com/nvkelso/natural-earth-vector
+World coastline derived from geojson/ne_50m_land.geojson, simplified at 0.075 degrees.
+Shanghai-region coastline derived from geojson/ne_10m_land.geojson, clipped to 117–126 E, 27–36 N, simplified at 0.0008 degrees.
+Retrieved 2026-09-26. Geography is generalized and not a surveying or navigation basemap.
+
+d3-array 3.2.4 and d3-geo 3.1.1, ISC license.
+Copyright 2010–2023 Mike Bostock
+
+Permission to use, copy, modify, and/or distribute this software for any purpose
+with or without fee is hereby granted, provided that the above copyright notice
+and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+
+The Shanghai anchor (121.6000 E, 31.2000 N) is a hypothetical location selected
+for this demonstration. The campus, buildings, base stations, UE positions and
+roads are synthetic and do not describe the real site at that coordinate.
