@@ -4,6 +4,19 @@ World coastline derived from geojson/ne_50m_land.geojson, simplified at 0.075 de
 Shanghai-region coastline derived from geojson/ne_10m_land.geojson, clipped to 117–126 E, 27–36 N, simplified at 0.0008 degrees.
 Retrieved 2026-09-26. Geography is generalized and not a surveying or navigation basemap.
 
+Earth texture: NASA Earth Observatory, Blue Marble: Next Generation,
+January 2004, with topography and bathymetry, 5400 x 2700 (8 km/pixel).
+Historical composite, not current imagery; used only for the globe overview.
+Source and image credits:
+https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-topography-bathymetry/
+Asset: https://assets.science.nasa.gov/content/dam/science/esd/eo/images/bmng/bmng-topography-bathymetry/january/world.topo.bathy.200401.3x5400x2700.jpg
+NASA imagery usage: https://www.nasa.gov/nasa-brand-center/images-and-media/
+No NASA endorsement implied.
+
+Three.js 0.160.1, MIT license (see THREE-LICENSE.txt).
+Copyright 2010-2023 Three.js Authors. https://threejs.org/
+Campus geometry and procedural materials are synthetic and created for this demo.
+
 d3-array 3.2.4 and d3-geo 3.1.1, ISC license.
 Copyright 2010–2023 Mike Bostock
 

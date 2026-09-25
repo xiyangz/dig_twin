@@ -56,7 +56,7 @@ class GlobeNavigation{
   document.getElementById('geoZoom').value=String(this.level/m.maxLevel*100);document.getElementById('geoZoom').setAttribute('aria-valuetext',titles[current]);
   document.querySelectorAll('[data-geo-view]').forEach(b=>{const on=b.dataset.geoView===current||(b.dataset.geoView==='city'&&current==='region');b.classList.toggle('active',on);b.setAttribute('aria-pressed',String(on));});
   document.getElementById('geoStatus').textContent=current==='campus'?'园区 · 1 km²':'上海假设锚点 · WGS84';
-  document.querySelector('.scene-meta').textContent=current==='campus'?'2.5D · 假设场景':'地球 → 上海 → 园区';
+  document.querySelector('.scene-meta').textContent=current==='campus'?(this.options.visuals?.ready?'3D · 午后日光 · 假设场景':'2.5D · 兼容模式'):'地球 → 上海 → 园区';
   this.canvas.setAttribute('aria-label','地球与上海园区导航，当前'+titles[current]+'。加减键缩放，Home 返回地球，Escape 停止飞行。');
  }
  drawMap(w,h,dpr,m){const g=this.context,cx=w/2,cy=h*.50,tilt=m.tilt,rotation=this.options.angle()*smooth(m.campusLevel-3,m.campusLevel-.4,this.level);g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
@@ -73,6 +73,8 @@ class GlobeNavigation{
   if(this.level>=2){const span=Math.min(16,Math.max(.008,650/m.radius*180/Math.PI)),step=this.level<5?5:this.level<8?1:this.level<11?.1:.01;const lines=[];for(let lat=Math.floor((this.lat-span)/step)*step;lat<=this.lat+span;lat+=step)lines.push([[this.lon-span,lat],[this.lon+span,lat]]);for(let lon=Math.floor((this.lon-span)/step)*step;lon<=this.lon+span;lon+=step)lines.push([[lon,this.lat-span],[lon,this.lat+span]]);g.beginPath();path({type:'MultiLineString',coordinates:lines});g.strokeStyle='#92c6b818';g.lineWidth=.6;g.stroke();}
   if(this.level>5){g.beginPath();path(this.campusBoundary);g.fillStyle='#64e4b114';g.fill();g.strokeStyle='#91ffd9';g.lineWidth=1.3;g.setLineDash([5,4]);g.stroke();g.setLineDash([]);}
   g.restore();
+  this.options.visuals?.earth(g,w,h,dpr,this.lon,this.lat,m.radius,1-smooth(1.5,3.3,this.level));
+  const credit=document.querySelector('.geo-credit');credit.textContent=this.level<2&&this.options.visuals?.earthReady?'NASA Blue Marble · 历史合成影像':'Natural Earth · 示意底图';credit.href=this.level<2&&this.options.visuals?.earthReady?'https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-topography-bathymetry/':'https://www.naturalearthdata.com/about/terms-of-use/';
   const project=p=>{const v=this.projection(p),a=rotation;return[cx+v[0]*Math.cos(a)-v[1]*Math.sin(a),cy+(v[0]*Math.sin(a)+v[1]*Math.cos(a))*tilt];};
   const visible=root.d3.geoDistance([this.lon,this.lat],[ANCHOR.lon,ANCHOR.lat])<Math.PI/2-.01;
   const point=project([ANCHOR.lon,ANCHOR.lat]);this.pinPoint=visible?point:null;const pin=document.getElementById('regionPin'),shown=visible&&point[0]>20&&point[0]<w-20&&point[1]>85&&point[1]<h-60&&m.transition<.85;
