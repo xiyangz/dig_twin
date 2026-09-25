@@ -37,9 +37,12 @@ class ImagerySurface{
     float land=texture2D(landMask,vUv).r;
     // Fine texture conveys a material, never roads or measured relief.
     float oceanPixel=smoothstep(0.0,0.035,photo.b-max(photo.r,photo.g));
-    vec3 landColor=mix(max(photo,vec3(0.023,0.025,0.018)),vec3(0.082,0.10,0.062),0.25+0.75*oceanPixel);
+    vec3 landColor=mix(max(photo,vec3(0.023,0.025,0.018)),vec3(0.065,0.12,0.061),0.15+0.85*oceanPixel);
+    // Apply the spring material only to dark, vegetation-like hues; keep desert and snow palettes.
+    float vegetation=smoothstep(0.65,0.98,photo.g/max(photo.r,0.001))*(1.0-smoothstep(0.25,0.55,max(photo.r,photo.g)))*(1.0-oceanPixel);
+    landColor=mix(landColor,landColor*vec3(0.64,1.46,1.08),vegetation*0.9);
     vec3 oceanColor=mix(vec3(0.009,0.022,0.049),photo,0.45*oceanPixel);
-    landColor=mix(landColor,vec3(0.04,0.075,0.032),0.22*smoothstep(0.3,0.8,noise(location*18.0))*smoothstep(5.0,8.0,level));
+    landColor=mix(landColor,vec3(0.043,0.11,0.042),0.22*smoothstep(0.3,0.8,noise(location*18.0))*smoothstep(5.0,8.0,level));
     float grain=(noise(location*5.0)-0.5)*0.55;
     grain+=(noise(location*36.0)-0.5)*0.30*smoothstep(6.0,9.0,level);
     grain+=(noise(location*240.0)-0.5)*0.18*smoothstep(9.0,12.0,level);

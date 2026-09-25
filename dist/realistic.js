@@ -7,18 +7,19 @@ class RealisticView {
   this.ready=false;this.earthReady=false;this.batches=new Map();this.materials=new Map();
   if(!T)return;
   try{this.renderer=new T.WebGLRenderer({antialias:true,alpha:true,powerPreference:'low-power'});}catch{return;}
-  this.renderer.outputColorSpace=T.SRGBColorSpace;
+  this.renderer.outputColorSpace=T.SRGBColorSpace;this.renderer.localClippingEnabled=true;
   this.renderer.toneMapping=T.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.08;
   this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=T.PCFSoftShadowMap;
   this.renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();this.ready=false;this.earthReady=false;onReady();});
   // The original Canvas renderer remains available if WebGL is lost or unavailable.
   this.scene=new T.Scene();this.camera=new T.OrthographicCamera(-800,800,600,-600,.1,5000);
-  this.scene.add(new T.HemisphereLight(0xc8dff1,0x77755c,2.0));
-  const sun=new T.DirectionalLight(0xffecd2,3.1);sun.position.set(-420,700,-320);sun.castShadow=true;
+  this.scene.add(new T.HemisphereLight(0xc8dff1,0x697962,2.0));
+  const sun=new T.DirectionalLight(0xfff8ec,3.1);sun.position.set(-420,700,-320);sun.castShadow=true;
   Object.assign(sun.shadow.camera,{left:-830,right:830,top:830,bottom:-830,near:50,far:1900});
   sun.shadow.mapSize.set(2048,2048);sun.shadow.bias=-.0003;sun.shadow.normalBias=.6;sun.shadow.radius=3;
   this.scene.add(sun);this.sun=sun;
-  this.makeGround();buildings.forEach((b,i)=>this.makeBuilding(b,i));
+  this.makeGround();this.flushBatches();this.buildingGroups=buildings.map((b,i)=>{const group=new T.Group();this.makeBuilding(b,i);this.flushBatches(group);this.scene.add(group);return group;});
+  this.indoorFloor=new T.Group();this.scene.add(this.indoorFloor);this.indoorKey='';
   bases.forEach(b=>this.makeBase(b));this.makeLandscape();this.flushBatches();
   this.users=Array.from({length:12},(_,id)=>this.makeUser(id));
   this.heatCanvas=document.createElement('canvas');this.heatCanvas.width=this.heatCanvas.height=250;
@@ -27,7 +28,7 @@ class RealisticView {
   this.heat=new T.Mesh(new T.PlaneGeometry(1000,1000),heatMaterial);this.heat.rotation.x=-Math.PI/2;this.heat.position.y=.85;this.heat.renderOrder=1;this.scene.add(this.heat);
   this.earthScene=new T.Scene();this.earthCamera=new T.OrthographicCamera(-2,2,2,-2,.1,20);
   this.earthScene.add(new T.AmbientLight(0xb7d1ea,.8));this.earthSun=new T.DirectionalLight(0xffffff,2.2);this.earthScene.add(this.earthSun);
-  const loader=new T.TextureLoader();loader.load('assets/earth-blue-marble.jpg',texture=>{
+  const loader=new T.TextureLoader();loader.load('assets/earth-blue-marble-may.jpg',texture=>{
    texture.colorSpace=T.SRGBColorSpace;texture.anisotropy=Math.min(4,this.renderer.capabilities.getMaxAnisotropy());
    this.earthTexture=texture;this.surface=new root.AirViewImagery.ImagerySurface(T);
    this.earthMesh=new T.Mesh(new T.SphereGeometry(1,128,64),new T.MeshPhongMaterial({map:texture,shininess:5,specular:0x1e2836}));
@@ -40,14 +41,14 @@ class RealisticView {
   const mat=this.material(color,roughness,metalness);if(!this.batches.has(mat))this.batches.set(mat,[]);
   this.batches.get(mat).push({x:x-500+w/2,y:z+h/2,z:y-500+d/2,w,h,d});
  }
- flushBatches(){const geo=new T.BoxGeometry(1,1,1),dummy=new T.Object3D();for(const [mat,boxes]of this.batches){const mesh=new T.InstancedMesh(geo,mat,boxes.length);boxes.forEach((b,i)=>{dummy.position.set(b.x,b.y,b.z);dummy.scale.set(b.w,b.h,b.d);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);});mesh.castShadow=true;mesh.receiveShadow=true;this.scene.add(mesh);}this.batches.clear();}
+ flushBatches(target=this.scene){const geo=new T.BoxGeometry(1,1,1),dummy=new T.Object3D();for(const [mat,boxes]of this.batches){const mesh=new T.InstancedMesh(geo,target===this.scene?mat:mat.clone(),boxes.length);boxes.forEach((b,i)=>{dummy.position.set(b.x,b.y,b.z);dummy.scale.set(b.w,b.h,b.d);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);});mesh.castShadow=true;mesh.receiveShadow=true;target.add(mesh);}this.batches.clear();}
  plane(x,y,w,d,color,z=0){this.box(x,y,w,d,.25,color,z);}
  makeGround(){
   this.box(-20,-20,1040,1040,7,'#81816f',-7);
   const textureCanvas=document.createElement('canvas');textureCanvas.width=textureCanvas.height=256;
-  const g=textureCanvas.getContext('2d');g.fillStyle='#829070';g.fillRect(0,0,256,256);
+  const g=textureCanvas.getContext('2d');g.fillStyle='#63875b';g.fillRect(0,0,256,256);
   let seed=41;const rand=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
-  for(let i=0;i<11000;i++){g.fillStyle=rand()>.5?'#9a9e7730':'#485f4825';g.fillRect(rand()*256,rand()*256,1+rand()*2,1+rand()*2);}
+  for(let i=0;i<11000;i++){g.fillStyle=rand()>.5?'#97b68130':'#485f4825';g.fillRect(rand()*256,rand()*256,1+rand()*2,1+rand()*2);}
   const tex=new T.CanvasTexture(textureCanvas);tex.colorSpace=T.SRGBColorSpace;tex.wrapS=tex.wrapT=T.RepeatWrapping;tex.repeat.set(12,12);
   const grass=new T.Mesh(new T.PlaneGeometry(1040,1040),new T.MeshStandardMaterial({map:tex,roughness:1}));grass.rotation.x=-Math.PI/2;grass.position.y=.15;grass.receiveShadow=true;this.scene.add(grass);
   // Wide curb, paving, asphalt, then painted markings. Dimensions remain in metres.
@@ -93,9 +94,9 @@ class RealisticView {
  }
  cylinder(x,y,z,height,radius,color){const mesh=new T.Mesh(new T.CylinderGeometry(radius*.72,radius,height,7),this.material(color));mesh.position.set(x-500,z+height/2,y-500);mesh.castShadow=true;this.scene.add(mesh);return mesh;}
  makeBase(b){
-  this.box(b.x-6,b.y-6,12,12,2,'#acaeaa',1);this.cylinder(b.x,b.y,2,b.z-2,1.2,'#c5cecb');
+  this.box(b.x-6,b.y-6,12,12,2,'#acaeaa',b.baseZ);this.cylinder(b.x,b.y,b.baseZ+2,b.z-b.baseZ-2,1.2,'#c5cecb');
   for(let i=0;i<3;i++){const a=i*Math.PI*2/3,x=b.x+Math.cos(a)*3,y=b.y+Math.sin(a)*3;this.box(x-1.2,y-1.2,2.4,2.4,11,'#e5e6df',b.z-11);}
-  this.box(b.x+7,b.y-4,5,7,9,'#d6d7cb',1);
+  this.box(b.x+7,b.y-4,5,7,9,'#d6d7cb',b.baseZ);
  }
  car(x,y,i){const colors=['#e1e0d7','#737f89','#ad7461','#dadbcf'];this.box(x,y,6,14,3,colors[i%4],1,.3,.15);this.box(x+.5,y+3,5,7,2,'#47616a',4,.24,.25);for(const dx of [-.6,5.6])for(const dy of [2,10])this.box(x+dx,y+dy,1,2.5,2.5,'#303536',.7);}
  makeLandscape(){
@@ -105,7 +106,7 @@ class RealisticView {
   for(let i=0;i<12;i++)treeLocations.push([125+i*39,320],[135+i*39,693]);
   for(const p of [[453,454],[556,460],[455,566],[548,565],[405,798],[665,235],[665,520]])treeLocations.push(p);
   const dummy=new T.Object3D(),geo=new T.IcosahedronGeometry(1,2),foliage=new T.InstancedMesh(geo,this.material('#53744a'),treeLocations.length*3);
-  treeLocations.forEach(([x,y],i)=>{const h=11+(i%5)*1.7;this.box(x-1,y-1,2,2,h*.7,'#84725a',.3);for(let j=0;j<3;j++){dummy.position.set(x-500+(j-1)*3,h*.65+j*1.8,y-500+(j%2)*3);dummy.scale.set(6+j,7.5+j,6+j);dummy.updateMatrix();foliage.setMatrixAt(i*3+j,dummy.matrix);foliage.setColorAt(i*3+j,new T.Color(['#8d9e72','#749365','#9b9d73'][i%3]));}});
+  treeLocations.forEach(([x,y],i)=>{const h=11+(i%5)*1.7;this.box(x-1,y-1,2,2,h*.7,'#84725a',.3);for(let j=0;j<3;j++){dummy.position.set(x-500+(j-1)*3,h*.65+j*1.8,y-500+(j%2)*3);dummy.scale.set(6+j,7.5+j,6+j);dummy.updateMatrix();foliage.setMatrixAt(i*3+j,dummy.matrix);foliage.setColorAt(i*3+j,new T.Color(['#83a86c','#6b9860','#92af79'][i%3]));}});
   foliage.castShadow=true;foliage.receiveShadow=true;this.scene.add(foliage);
   // A few quiet street lights and park benches; no new radio obstructions are implied.
   for(let x=155;x<900;x+=130){this.box(x,401,1,1,17,'#808988',1);this.box(x,399,7,2,1,'#c5c9bf',18);}
@@ -113,12 +114,22 @@ class RealisticView {
  }
  makeUser(id){const group=new T.Group(),body=new T.Mesh(new T.BoxGeometry(id%4===2?7:4,3,id%4===2?11:5),this.material('#d9d9cc',.55,.15));body.position.y=2.8;body.castShadow=true;group.add(body);const head=new T.Mesh(new T.CylinderGeometry(.8,.8,4,6),this.material('#516269'));head.position.y=6;group.add(head);this.scene.add(group);return group;}
  size(w,h,dpr){const key=[w,h,dpr].join(':');if(key!==this.sizeKey){this.renderer.setPixelRatio(Math.min(dpr,1.5));this.renderer.setSize(w,h,false);this.sizeKey=key;}this.width=w;this.height=h;}
- campus(g,w,h,dpr,angle,zoom,tilt,users,heatVisible,heatCells){
+ setIndoorView(user,enabled,buildings){
+  const index=enabled&&user.environment==='indoor'?user.building:-1,key=index+':'+user.floor;
+  if(key===this.indoorKey)return;this.indoorKey=key;
+  this.buildingGroups.forEach((group,i)=>group.traverse(mesh=>{if(!mesh.isMesh)return;const ghost=i===index;mesh.material.transparent=ghost;mesh.material.opacity=ghost?.38:1;mesh.material.depthWrite=!ghost;mesh.material.clippingPlanes=ghost?[new T.Plane(new T.Vector3(0,-1,0),user.z+3)]:[];mesh.material.needsUpdate=true;mesh.castShadow=!ghost;}));
+  while(this.indoorFloor.children.length){const child=this.indoorFloor.children[0];child.geometry?.dispose();child.material?.dispose();this.indoorFloor.remove(child);}
+  if(index<0)return;const b=buildings[index],floorZ=user.z-1.5;
+  const floor=new T.Mesh(new T.PlaneGeometry(b.w-4,b.d-4),new T.MeshStandardMaterial({color:'#abc5b5',roughness:1,side:T.DoubleSide}));floor.rotation.x=-Math.PI/2;floor.position.set(b.x+b.w/2-500,floorZ+.7,b.y+b.d/2-500);this.indoorFloor.add(floor);
+  // A schematic floor plan: side rooms leave a continuous perimeter route.
+  for(const dx of [b.w*.32,b.w*.67]){const wall=new T.Mesh(new T.BoxGeometry(1.3,2.8,b.d*.45),new T.MeshStandardMaterial({color:'#d6e2d8'}));wall.position.set(b.x+dx-500,floorZ+2.1,b.y+b.d*.5-500);this.indoorFloor.add(wall);}
+ }
+ campus(g,w,h,dpr,angle,zoom,tilt,users,heatVisible,heatCells,selected,indoorView,buildings,focus){
   if(!this.ready)return false;this.size(w,h,dpr);
   const scale=Math.min(w/1510,h/1130)*zoom,t=Math.min(.99999,tilt),horizontal=Math.sqrt(1-t*t),cam=this.camera;
   cam.left=-w/scale/2;cam.right=w/scale/2;cam.top=h/scale/2;cam.bottom=-h/scale/2;
-  cam.position.set(Math.sin(angle)*horizontal*1800,t*1800,Math.cos(angle)*horizontal*1800);cam.lookAt(0,0,0);cam.updateProjectionMatrix();cam.updateMatrixWorld();
-  users.forEach((u,i)=>{const m=this.users[i],dx=u.x-(m.userData.x??u.x),dy=u.y-(m.userData.y??u.y);if(Math.hypot(dx,dy)>.001)m.rotation.y=Math.atan2(dx,dy);m.position.set(u.x-500,.5,u.y-500);m.userData={x:u.x,y:u.y};});
+  const fx=focus.x-500,fy=focus.y-500;cam.position.set(fx+Math.sin(angle)*horizontal*1800,t*1800,fy+Math.cos(angle)*horizontal*1800);cam.lookAt(fx,0,fy);cam.updateProjectionMatrix();cam.updateMatrixWorld();
+  this.setIndoorView(users[selected],indoorView,buildings);users.forEach((u,i)=>{const m=this.users[i],dx=u.x-(m.userData.x??u.x),dy=u.y-(m.userData.y??u.y);if(Math.hypot(dx,dy)>.001)m.rotation.y=Math.atan2(dx,dy);m.scale.setScalar(u.environment==='indoor'?.35:1);m.position.set(u.x-500,u.z-1,u.y-500);m.userData={x:u.x,y:u.y};});
   this.heat.visible=heatVisible;if(heatVisible&&this.lastHeat!==heatCells){const c=this.heatCanvas.getContext('2d');c.clearRect(0,0,250,250);for(const cell of heatCells){c.fillStyle=cell.color;c.fillRect(cell.x/4,cell.y/4,10,10);}this.heatTexture.needsUpdate=true;this.lastHeat=heatCells;}
   this.renderer.setClearColor(0x000000,0);this.renderer.render(this.scene,cam);g.drawImage(this.renderer.domElement,0,0,w,h);return true;
  }

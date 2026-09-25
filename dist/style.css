@@ -4,3 +4,7 @@
 @media(min-width:641px) and (max-width:960px){.workspace{grid-template-columns:1fr 1fr;gap:14px}.scene{grid-column:1/-1;grid-row:1}.canvas-wrap{min-height:450px}.controls{grid-column:1;grid-row:2;padding:20px}.terminal{grid-column:2;grid-row:2;display:block;padding:20px}.terminal .panel-head{margin-bottom:18px}.terminal .signal-metrics{padding:21px 0}.terminal-stats{border-top:1px solid var(--line)}.terminal .spark-head,.terminal .harq-title{display:flex}.terminal #sparkline,.terminal>.helper{display:block}.terminal .harq-processes{display:flex}.scene-meta{display:inline}.coverage-scale{bottom:20px}}
 
 #cqi{font-size:22px;white-space:nowrap}.field-label,.range-label,.toggle-row,.section-label{font-size:14px}.signal-metrics b{white-space:nowrap}.scene-toolbar b{font-size:14px}
+
+.ue-location{font-size:11px;color:#9ab6ba;line-height:1.6;margin:0 0 10px}.locate-button{margin:0 0 12px}.indoor-status{position:absolute;z-index:2;left:18px;bottom:55px;background:#142d29e8;color:#b6ebcf;border:1px solid #579777;border-radius:6px;padding:8px 12px;font-size:11px;pointer-events:none}.indoor-status[hidden]{display:none}.device-heading select{max-width:100%}.device-heading>div:last-child{min-width:0;flex:1}
+
+.canvas-wrap:not([data-geo-stage=campus]) .indoor-status{display:none}@media(max-width:640px){.terminal .device-heading,.terminal .connection{float:none;width:100%}.ue-location{margin-top:6px}.indoor-status{font-size:10px;left:12px;padding:6px 8px;max-width:calc(100% - 24px)}}

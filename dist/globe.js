@@ -7,20 +7,20 @@ const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
 function geometry(width,height,level){
  const baseRadius=Math.min(width*.39,height*.33),campusScale=Math.min(width/1510,height/1130);
  const campusLevel=Math.log2(R*campusScale/baseRadius);
- const z=clamp(level,0,campusLevel+1.25),transition=smooth(campusLevel-2,campusLevel-.15,z);
- return{level:z,baseRadius,radius:baseRadius*2**z,campusLevel,maxLevel:campusLevel+1.25,campusZoom:2**(z-campusLevel),transition,bearingFactor:smooth(campusLevel-3,campusLevel-.4,z),tilt:1-.43*smooth(campusLevel-3,campusLevel-.4,z)};
+ const z=clamp(level,0,campusLevel+2.25),transition=smooth(campusLevel-2,campusLevel-.15,z);
+ return{level:z,baseRadius,radius:baseRadius*2**z,campusLevel,maxLevel:campusLevel+2.25,campusZoom:2**(z-campusLevel),transition,bearingFactor:smooth(campusLevel-3,campusLevel-.4,z),tilt:1-.43*smooth(campusLevel-3,campusLevel-.4,z)};
 }
 function localToGeo(x,y){return[ANCHOR.lon+(x-500)/R*180/Math.PI/Math.cos(ANCHOR.lat*Math.PI/180),ANCHOR.lat-(y-500)/R*180/Math.PI];}
 function stage(level,campusLevel){return level<2?'earth':level<7?'region':level<campusLevel-1?'city':'campus';}
 class GlobeNavigation{
  constructor(options){
   this.options=options;this.canvas=options.canvas;this.earth=document.getElementById('earthCanvas');this.context=this.earth.getContext('2d');this.wrap=this.canvas.parentElement;
-  this.level=0;this.target=0;this.lon=108;this.lat=24;this.animation=null;this.raf=0;this.previous=0;this.dirty=true;this.frozen=false;this.pointerMap=new Map();this.drag=null;this.pinch=null;this.reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  this.focus={x:500,y:500};this.level=0;this.target=0;this.lon=108;this.lat=24;this.animation=null;this.raf=0;this.previous=0;this.dirty=true;this.frozen=false;this.pointerMap=new Map();this.drag=null;this.pinch=null;this.reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
   this.projection=root.d3.geoOrthographic().precision(.5);this.graticule=root.d3.geoGraticule10();this.landMask=document.createElement('canvas');
   this.campusBoundary={type:'LineString',coordinates:[[0,0],[1000,0],[1000,1000],[0,1000],[0,0]].map(p=>localToGeo(...p))};
   this.bind();this.render();
  }
- state(){const {width,height}=this.options.dimensions(),m=geometry(width,height,this.level);return{view:stage(this.level,m.campusLevel),zoomLevel:+this.level.toFixed(3),campusLevel:+m.campusLevel.toFixed(3),campusOpacity:+m.transition.toFixed(3),animating:!!this.animation||Math.abs(this.target-this.level)>.002,anchor:{...ANCHOR,hypothetical:true}};}
+ state(){const {width,height}=this.options.dimensions(),m=geometry(width,height,this.level);return{view:stage(this.level,m.campusLevel),zoomLevel:+this.level.toFixed(3),campusLevel:+m.campusLevel.toFixed(3),maxZoomLevel:+m.maxLevel.toFixed(3),campusMagnification:+m.campusZoom.toFixed(3),focus:{...this.focus},campusOpacity:+m.transition.toFixed(3),animating:!!this.animation||Math.abs(this.target-this.level)>.002,anchor:{...ANCHOR,hypothetical:true}};}
  metrics(){const {width,height}=this.options.dimensions();return geometry(width,height,this.level);}
  frame(now){this.raf=0;const elapsed=this.previous?Math.min(64,now-this.previous):16;this.previous=now;
   if(this.animation){const a=this.animation,t=clamp((now-a.start)/a.duration,0,1),e=t*t*(3-2*t);this.level=a.from+(a.to-a.from)*e;const focus=smooth(0,.38,t);this.lon=a.lon+(ANCHOR.lon-a.lon)*focus;this.lat=a.lat+(ANCHOR.lat-a.lat)*focus;if(t===1){this.level=a.to;this.animation=null;}}
@@ -29,7 +29,8 @@ class GlobeNavigation{
  }
  request(){if(!this.raf)this.raf=requestAnimationFrame(t=>this.frame(t));}
  setLevel(value){if(!Number.isFinite(value))throw Error('缩放值必须为有限数值');const m=this.metrics();this.animation=null;this.target=clamp(value,0,m.maxLevel);if(this.reduceMotion){this.level=this.target;if(this.target>1.5){this.lon=ANCHOR.lon;this.lat=ANCHOR.lat;}this.dirty=true;this.render();}else this.request();}
- fly(view){if(!['earth','region','city','campus'].includes(view))throw Error('未知视图');const m=this.metrics(),to={earth:0,region:5.7,city:9,campus:m.campusLevel}[view];if(this.reduceMotion){this.setLevel(to);return this.state();}this.target=to;this.animation={from:this.level,to,lon:this.lon,lat:this.lat,start:performance.now(),duration:clamp(Math.abs(to-this.level)*430,900,6500)};this.request();return this.state();}
+ focusAt(x,y){this.focus={x:clamp(x,0,1000),y:clamp(y,0,1000)};this.lon=ANCHOR.lon;this.lat=ANCHOR.lat;this.dirty=true;this.setLevel(Math.max(this.metrics().campusLevel+.8,this.level));this.render();}
+ fly(view){this.focus={x:500,y:500};this.dirty=true;if(!['earth','region','city','campus'].includes(view))throw Error('未知视图');const m=this.metrics(),to={earth:0,region:5.7,city:9,campus:m.campusLevel}[view];if(this.reduceMotion){this.setLevel(to);return this.state();}this.target=to;this.animation={from:this.level,to,lon:this.lon,lat:this.lat,start:performance.now(),duration:clamp(Math.abs(to-this.level)*430,900,6500)};this.request();return this.state();}
  bind(){
   document.querySelectorAll('[data-geo-view]').forEach(b=>b.onclick=()=>this.fly(b.dataset.geoView));
   document.getElementById('focusCampus').onclick=()=>this.fly('campus');document.getElementById('regionPin').onclick=()=>this.fly('campus');
@@ -46,21 +47,21 @@ class GlobeNavigation{
   this.canvas.addEventListener('pointerup',release);this.canvas.addEventListener('pointercancel',release);this.canvas.addEventListener('lostpointercapture',e=>{this.pointerMap.delete(e.pointerId);if(!this.pointerMap.size){this.drag=null;this.pinch=null;}});
  }
  render(){const {width:w,height:h,dpr}=this.options.dimensions();if(w<=0||h<=0)return;const m=geometry(w,h,this.level);this.level=m.level;this.target=clamp(this.target,0,m.maxLevel);this.canvas.style.opacity=m.transition;this.earth.style.opacity=this.options.visuals?.earthReady?1:1-smooth(.6,1,m.transition);
-  if(m.transition>0)this.options.drawCampus(m.campusZoom,m.tilt,this.options.angle()*m.bearingFactor);else this.options.clearCampus();
+  if(m.transition>0)this.options.drawCampus(m.campusZoom,m.tilt,this.options.angle()*m.bearingFactor,{x:500+(this.focus.x-500)*m.transition,y:500+(this.focus.y-500)*m.transition});else this.options.clearCampus();
   const current=stage(this.level,m.campusLevel);this.wrap.dataset.geoStage=current;
   if(this.earth.width!==Math.round(w*dpr)||this.earth.height!==Math.round(h*dpr)){this.earth.width=Math.round(w*dpr);this.earth.height=Math.round(h*dpr);this.dirty=true;}
   if(this.lastAngle!==this.options.angle()){this.lastAngle=this.options.angle();this.dirty=true;}
   if(this.dirty){this.drawMap(w,h,dpr,m);this.dirty=false;}
   const titles={earth:'地球视角',region:'上海所在区域',city:'上海 · 园区定位',campus:'青岚科技园'};
-  document.getElementById('geoStage').textContent=titles[current];document.getElementById('geoHint').textContent=this.animation?'正在沿地理锚点平滑缩放…':current==='campus'?'继续缩小可返回地球 · 点击终端查看 MAC':current==='earth'?'滚轮放大，或点击上海标记进入园区':'影像风格示意底图 · 继续放大进入合成园区';
+  document.getElementById('geoStage').textContent=titles[current];document.getElementById('geoHint').textContent=this.animation?'正在沿地理锚点平滑缩放…':current==='campus'?'滚轮缩放 · 拖动旋转 · 定位终端可查看细节':current==='earth'?'滚轮放大，或点击上海标记进入园区':'影像风格示意底图 · 继续放大进入合成园区';
   document.getElementById('geoZoom').value=String(this.level/m.maxLevel*100);document.getElementById('geoZoom').setAttribute('aria-valuetext',titles[current]);
   document.querySelectorAll('[data-geo-view]').forEach(b=>{const on=b.dataset.geoView===current||(b.dataset.geoView==='city'&&current==='region');b.classList.toggle('active',on);b.setAttribute('aria-pressed',String(on));});
-  document.getElementById('geoStatus').textContent=current==='campus'?'园区 · 1 km²':'上海假设锚点 · WGS84';
+  document.getElementById('geoStatus').textContent=current==='campus'?'园区 · '+m.campusZoom.toFixed(1)+'×':'上海假设锚点 · WGS84';
   document.querySelector('.scene-meta').textContent=current==='campus'?(this.options.visuals?.ready?'3D · 午后日光 · 假设场景':'2.5D · 兼容模式'):'地球 → 上海 → 园区';
   this.canvas.setAttribute('aria-label','地球与上海园区导航，当前'+titles[current]+'。加减键缩放，Home 返回地球，Escape 停止飞行。');
  }
  drawMap(w,h,dpr,m){const g=this.context,cx=w/2,cy=h*.50,tilt=m.tilt,rotation=this.options.angle()*m.bearingFactor;g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
-  this.projection.rotate([-this.lon,-this.lat,0]).translate([0,0]).scale(m.radius).clipExtent([[-w*2,-h*3],[w*2,h*3]]);const path=root.d3.geoPath(this.projection,g);
+  const focusGeo=localToGeo(this.focus.x,this.focus.y),centerLon=this.lon+(focusGeo[0]-ANCHOR.lon)*m.transition,centerLat=this.lat+(focusGeo[1]-ANCHOR.lat)*m.transition;this.projection.rotate([-centerLon,-centerLat,0]).translate([0,0]).scale(m.radius).clipExtent([[-w*2,-h*3],[w*2,h*3]]);const path=root.d3.geoPath(this.projection,g);
   // Glow follows the actual sphere limb and disappears naturally as it leaves the viewport.
   if(this.level<1.5){const glow=g.createRadialGradient(cx,cy,m.radius*.93,cx,cy,m.radius*1.10);glow.addColorStop(0,'#4688ae00');glow.addColorStop(.6,'#62bfff24');glow.addColorStop(1,'#62bfff00');g.fillStyle=glow;g.fillRect(0,0,w,h);}
   g.save();g.translate(cx,cy);g.scale(1,tilt);g.rotate(rotation);
@@ -81,9 +82,9 @@ class GlobeNavigation{
   const paintMask=(target,features)=>{const c=target.getContext('2d');c.setTransform(1,0,0,1,0,0);c.fillStyle='#000';c.fillRect(0,0,w,h);c.save();c.translate(cx,cy);c.scale(1,tilt);c.rotate(rotation);c.beginPath();root.d3.geoPath(this.projection,c)(features);c.fillStyle='#fff';c.fill();c.restore();};
   paintMask(mask,root.AirViewGeo.world);
   if(regionBlend>0){this.regionMask??=document.createElement('canvas');const rm=this.regionMask;if(rm.width!==mask.width||rm.height!==mask.height){rm.width=mask.width;rm.height=mask.height;}paintMask(rm,root.AirViewGeo.region);mg.globalAlpha=regionBlend;mg.drawImage(rm,0,0);mg.globalAlpha=1;}
-  this.options.visuals?.earth(g,w,h,dpr,this.lon,this.lat,m.radius,1,this.level,tilt,rotation,mask);
+  this.options.visuals?.earth(g,w,h,dpr,centerLon,centerLat,m.radius,1,this.level,tilt,rotation,mask);
   if(this.level>5){g.save();g.translate(cx,cy);g.scale(1,tilt);g.rotate(rotation);g.beginPath();path(this.campusBoundary);g.strokeStyle='#c5e3b4';g.lineWidth=1.1;g.setLineDash([5,4]);g.stroke();g.restore();}
-  const credit=document.querySelector('.geo-credit');credit.textContent=this.options.visuals?.earthReady?(this.level<4?'NASA Blue Marble · 历史合成影像':'NASA / Natural Earth · 纹理化示意底图'):'Natural Earth · 示意底图';credit.href=this.level<4&&this.options.visuals?.earthReady?'https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-topography-bathymetry/':'https://www.naturalearthdata.com/about/terms-of-use/';
+  const credit=document.querySelector('.geo-credit');credit.textContent=this.options.visuals?.earthReady?(this.level<4?'NASA Blue Marble · 2004 年 5 月':'NASA / Natural Earth · 纹理化示意底图'):'Natural Earth · 示意底图';credit.href=this.level<4&&this.options.visuals?.earthReady?'https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-topography-bathymetry/':'https://www.naturalearthdata.com/about/terms-of-use/';
   const project=p=>{const v=this.projection(p),a=rotation;return[cx+v[0]*Math.cos(a)-v[1]*Math.sin(a),cy+(v[0]*Math.sin(a)+v[1]*Math.cos(a))*tilt];};
   const visible=root.d3.geoDistance([this.lon,this.lat],[ANCHOR.lon,ANCHOR.lat])<Math.PI/2-.01;
   const point=project([ANCHOR.lon,ANCHOR.lat]);this.pinPoint=visible?point:null;const pin=document.getElementById('regionPin'),shown=visible&&point[0]>20&&point[0]<w-20&&point[1]>85&&point[1]<h-60&&m.transition<.85;

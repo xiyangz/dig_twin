@@ -7,6 +7,7 @@ for(const [w,h]of [[700,720],[340,440],[1250,650]]){
  assert(Math.abs(near.radius/R-Math.min(w/1510,h/1130))<1e-9,'Geographic and campus metre scale must agree');
  let previous=0;for(let level=0;level<=initial.maxLevel;level+=.01){const m=geometry(w,h,level);assert(Number.isFinite(m.radius));assert(m.transition>=previous);previous=m.transition;assert(m.tilt>=.57&&m.tilt<=1);}
  assert.equal(geometry(w,h,-100).level,0);assert.equal(geometry(w,h,100).level,initial.maxLevel);
+ assert(Math.abs(geometry(w,h,100).campusZoom/(2**1.25)-2)<1e-12,'Maximum magnification doubles the previous limit');
 }
 assert.deepEqual(localToGeo(500,500),[ANCHOR.lon,ANCHOR.lat]);assert(localToGeo(1000,500)[0]>ANCHOR.lon);assert(localToGeo(500,0)[1]>ANCHOR.lat);
 const sandbox={};sandbox.window=sandbox;vm.createContext(sandbox);for(const file of ['vendor/d3-array.min.js','vendor/d3-geo.min.js','geo-data.js'])vm.runInContext(fs.readFileSync('dist/'+file,'utf8'),sandbox);

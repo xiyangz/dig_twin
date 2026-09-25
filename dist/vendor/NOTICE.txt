@@ -5,11 +5,11 @@ Shanghai-region coastline derived from geojson/ne_10m_land.geojson, clipped to 1
 Retrieved 2026-09-26. Geography is generalized and not a surveying or navigation basemap.
 
 Earth texture: NASA Earth Observatory, Blue Marble: Next Generation,
-January 2004, with topography and bathymetry, 5400 x 2700 (8 km/pixel).
+May 2004, with topography and bathymetry, 5400 x 2700 (8 km/pixel).
 Historical composite, not current imagery; used only for the globe overview.
 Source and image credits:
 https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-topography-bathymetry/
-Asset: https://assets.science.nasa.gov/content/dam/science/esd/eo/images/bmng/bmng-topography-bathymetry/january/world.topo.bathy.200401.3x5400x2700.jpg
+Asset: https://assets.science.nasa.gov/content/dam/science/esd/eo/images/bmng/bmng-topography-bathymetry/may/world.topo.bathy.200405.3x5400x2700.jpg
 NASA imagery usage: https://www.nasa.gov/nasa-brand-center/images-and-media/
 No NASA endorsement implied.
 
