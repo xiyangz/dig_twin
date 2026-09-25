@@ -15,4 +15,18 @@ for(const fc of [data.world,data.region])for(const f of fc.features)assert(d3.ge
 assert(d3.geoContains(data.region,[ANCHOR.lon,ANCHOR.lat]),'Hypothetical Shanghai campus is on land');assert(!d3.geoContains(data.region,[124,31]),'East China Sea should remain ocean');
 const proj=d3.geoOrthographic().rotate([-ANCHOR.lon,-ANCHOR.lat]).translate([0,0]).scale(R);
 for(const p of [[0,0],[1000,1000],[500,500]]){const g=proj(localToGeo(...p));assert(Math.hypot(g[0]-(p[0]-500),g[1]-(p[1]-500))<.1,'Campus boundary remains geographically aligned');}
-console.log('Globe: scale continuity, monotonic transitions, zoom limits, anchor orientation, spherical polygons and Shanghai land placement passed.');
+const {surfacePoint,styleWeights}=require('../dist/imagery.js');
+for(const [lon,lat]of [[121.6,31.2],[-74,41],[18,-34],[179,60]]){
+ const projection=d3.geoOrthographic().rotate([-lon,-lat]).translate([0,0]).scale(30000);
+ for(const [dx,dy]of [[0,0],[.4,.3],[-.6,-.4]])for(const rotation of [0,-.6,1.2])for(const tilt of [1,.57]){
+  const expected=[lon+dx,lat+dy],p=projection(expected);
+  const screen=[p[0]*Math.cos(rotation)-p[1]*Math.sin(rotation),(p[0]*Math.sin(rotation)+p[1]*Math.cos(rotation))*tilt];
+  const point=surfacePoint(...screen,lon,lat,30000,tilt,rotation);
+  assert(d3.geoDistance(point,expected)<1e-9,'Image pixels must align with geographic markers worldwide, through camera tilt and rotation');
+ }
+}
+assert.equal(surfacePoint(400,0,0,0,300),null,'Do not sample outside the globe');
+let previousStyle=styleWeights(0);
+for(let level=0;level<16;level+=.001){const next=styleWeights(level);for(const key of ['flat','illustrated']){assert(next[key]>=previousStyle[key]);assert(next[key]-previousStyle[key]<.002,'No hard style threshold');}previousStyle=next;}
+assert.deepEqual(styleWeights(15),{flat:1,illustrated:1});
+console.log('Globe: scale continuity, global image/marker alignment, smooth style transitions, zoom limits, anchor orientation and Shanghai placement passed.');

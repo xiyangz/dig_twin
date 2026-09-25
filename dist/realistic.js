@@ -29,6 +29,7 @@ class RealisticView {
   this.earthScene.add(new T.AmbientLight(0xb7d1ea,.8));this.earthSun=new T.DirectionalLight(0xffffff,2.2);this.earthScene.add(this.earthSun);
   const loader=new T.TextureLoader();loader.load('assets/earth-blue-marble.jpg',texture=>{
    texture.colorSpace=T.SRGBColorSpace;texture.anisotropy=Math.min(4,this.renderer.capabilities.getMaxAnisotropy());
+   this.earthTexture=texture;this.surface=new root.AirViewImagery.ImagerySurface(T);
    this.earthMesh=new T.Mesh(new T.SphereGeometry(1,128,64),new T.MeshPhongMaterial({map:texture,shininess:5,specular:0x1e2836}));
    this.earthScene.add(this.earthMesh);this.earthReady=true;onReady();
   },undefined,()=>{this.earthReady=false;});
@@ -122,15 +123,18 @@ class RealisticView {
   this.renderer.setClearColor(0x000000,0);this.renderer.render(this.scene,cam);g.drawImage(this.renderer.domElement,0,0,w,h);return true;
  }
  project(x,y,z=0){const p=new T.Vector3(x-500,z,y-500).project(this.camera);return{x:(p.x+1)*this.width/2,y:(1-p.y)*this.height/2};}
- earth(g,w,h,dpr,lon,lat,radius,opacity){
+ earth(g,w,h,dpr,lon,lat,radius,opacity,level=0,tilt=1,rotation=0,mask=null){
   if(!this.ready||!this.earthReady||opacity<=0)return false;this.size(w,h,dpr);
   const cam=this.earthCamera,l=lon*Math.PI/180,a=lat*Math.PI/180;
   cam.left=-w/(2*radius);cam.right=-cam.left;cam.top=h/(2*radius);cam.bottom=-cam.top;
   cam.position.set(Math.cos(a)*Math.cos(l)*4,Math.sin(a)*4,-Math.cos(a)*Math.sin(l)*4);cam.lookAt(0,0,0);cam.updateProjectionMatrix();cam.updateMatrixWorld();
   const right=new T.Vector3().setFromMatrixColumn(cam.matrixWorld,0),up=new T.Vector3().setFromMatrixColumn(cam.matrixWorld,1);
   this.earthSun.position.copy(cam.position).addScaledVector(right,-3).addScaledVector(up,2.8);
-  this.renderer.setClearColor(0x000000,0);this.renderer.render(this.earthScene,cam);
-  g.save();g.globalAlpha=opacity;g.drawImage(this.renderer.domElement,0,0,w,h);g.restore();return true;
+  this.renderer.setClearColor(0x000000,0);
+  const blend=root.AirViewImagery.styleWeights(level).flat;
+  if(blend<1){this.renderer.render(this.earthScene,cam);g.save();g.globalAlpha=opacity;g.drawImage(this.renderer.domElement,0,0,w,h);g.restore();}
+  if(blend>0&&mask){this.surface.render(this.renderer,this.earthTexture,mask,w,h,lon,lat,radius,level,tilt,rotation);g.save();g.globalAlpha=opacity*blend;g.drawImage(this.renderer.domElement,0,0,w,h);g.restore();}
+  return true;
  }
 }
 root.AirViewRealistic=RealisticView;

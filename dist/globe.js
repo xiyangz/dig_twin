@@ -8,7 +8,7 @@ function geometry(width,height,level){
  const baseRadius=Math.min(width*.39,height*.33),campusScale=Math.min(width/1510,height/1130);
  const campusLevel=Math.log2(R*campusScale/baseRadius);
  const z=clamp(level,0,campusLevel+1.25),transition=smooth(campusLevel-2,campusLevel-.15,z);
- return{level:z,baseRadius,radius:baseRadius*2**z,campusLevel,maxLevel:campusLevel+1.25,campusZoom:2**(z-campusLevel),transition,tilt:1-.43*smooth(campusLevel-3,campusLevel-.4,z)};
+ return{level:z,baseRadius,radius:baseRadius*2**z,campusLevel,maxLevel:campusLevel+1.25,campusZoom:2**(z-campusLevel),transition,bearingFactor:smooth(campusLevel-3,campusLevel-.4,z),tilt:1-.43*smooth(campusLevel-3,campusLevel-.4,z)};
 }
 function localToGeo(x,y){return[ANCHOR.lon+(x-500)/R*180/Math.PI/Math.cos(ANCHOR.lat*Math.PI/180),ANCHOR.lat-(y-500)/R*180/Math.PI];}
 function stage(level,campusLevel){return level<2?'earth':level<7?'region':level<campusLevel-1?'city':'campus';}
@@ -16,7 +16,7 @@ class GlobeNavigation{
  constructor(options){
   this.options=options;this.canvas=options.canvas;this.earth=document.getElementById('earthCanvas');this.context=this.earth.getContext('2d');this.wrap=this.canvas.parentElement;
   this.level=0;this.target=0;this.lon=108;this.lat=24;this.animation=null;this.raf=0;this.previous=0;this.dirty=true;this.frozen=false;this.pointerMap=new Map();this.drag=null;this.pinch=null;this.reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
-  this.projection=root.d3.geoOrthographic().precision(.5);this.graticule=root.d3.geoGraticule10();
+  this.projection=root.d3.geoOrthographic().precision(.5);this.graticule=root.d3.geoGraticule10();this.landMask=document.createElement('canvas');
   this.campusBoundary={type:'LineString',coordinates:[[0,0],[1000,0],[1000,1000],[0,1000],[0,0]].map(p=>localToGeo(...p))};
   this.bind();this.render();
  }
@@ -45,36 +45,45 @@ class GlobeNavigation{
   const release=e=>{const d=this.drag;this.pointerMap.delete(e.pointerId);this.drag=null;this.pinch=null;if(e.type==='pointerup'&&d&&!d.moved){const r=this.canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;if(this.metrics().transition>.8)this.options.selectAt(x,y);else if(this.pinPoint&&Math.hypot(this.pinPoint[0]-x,this.pinPoint[1]-y)<50)this.fly('campus');}};
   this.canvas.addEventListener('pointerup',release);this.canvas.addEventListener('pointercancel',release);this.canvas.addEventListener('lostpointercapture',e=>{this.pointerMap.delete(e.pointerId);if(!this.pointerMap.size){this.drag=null;this.pinch=null;}});
  }
- render(){const {width:w,height:h,dpr}=this.options.dimensions();if(w<=0||h<=0)return;const m=geometry(w,h,this.level);this.level=m.level;this.target=clamp(this.target,0,m.maxLevel);this.canvas.style.opacity=m.transition;this.earth.style.opacity=1-smooth(.6,1,m.transition);
-  if(m.transition>0)this.options.drawCampus(m.campusZoom,m.tilt);else this.options.clearCampus();
+ render(){const {width:w,height:h,dpr}=this.options.dimensions();if(w<=0||h<=0)return;const m=geometry(w,h,this.level);this.level=m.level;this.target=clamp(this.target,0,m.maxLevel);this.canvas.style.opacity=m.transition;this.earth.style.opacity=this.options.visuals?.earthReady?1:1-smooth(.6,1,m.transition);
+  if(m.transition>0)this.options.drawCampus(m.campusZoom,m.tilt,this.options.angle()*m.bearingFactor);else this.options.clearCampus();
   const current=stage(this.level,m.campusLevel);this.wrap.dataset.geoStage=current;
   if(this.earth.width!==Math.round(w*dpr)||this.earth.height!==Math.round(h*dpr)){this.earth.width=Math.round(w*dpr);this.earth.height=Math.round(h*dpr);this.dirty=true;}
   if(this.lastAngle!==this.options.angle()){this.lastAngle=this.options.angle();this.dirty=true;}
   if(this.dirty){this.drawMap(w,h,dpr,m);this.dirty=false;}
   const titles={earth:'地球视角',region:'上海所在区域',city:'上海 · 园区定位',campus:'青岚科技园'};
-  document.getElementById('geoStage').textContent=titles[current];document.getElementById('geoHint').textContent=this.animation?'正在沿地理锚点平滑缩放…':current==='campus'?'继续缩小可返回地球 · 点击终端查看 MAC':current==='earth'?'滚轮放大，或点击上海标记进入园区':'继续放大，逐步显示园区建筑与终端';
+  document.getElementById('geoStage').textContent=titles[current];document.getElementById('geoHint').textContent=this.animation?'正在沿地理锚点平滑缩放…':current==='campus'?'继续缩小可返回地球 · 点击终端查看 MAC':current==='earth'?'滚轮放大，或点击上海标记进入园区':'影像风格示意底图 · 继续放大进入合成园区';
   document.getElementById('geoZoom').value=String(this.level/m.maxLevel*100);document.getElementById('geoZoom').setAttribute('aria-valuetext',titles[current]);
   document.querySelectorAll('[data-geo-view]').forEach(b=>{const on=b.dataset.geoView===current||(b.dataset.geoView==='city'&&current==='region');b.classList.toggle('active',on);b.setAttribute('aria-pressed',String(on));});
   document.getElementById('geoStatus').textContent=current==='campus'?'园区 · 1 km²':'上海假设锚点 · WGS84';
   document.querySelector('.scene-meta').textContent=current==='campus'?(this.options.visuals?.ready?'3D · 午后日光 · 假设场景':'2.5D · 兼容模式'):'地球 → 上海 → 园区';
   this.canvas.setAttribute('aria-label','地球与上海园区导航，当前'+titles[current]+'。加减键缩放，Home 返回地球，Escape 停止飞行。');
  }
- drawMap(w,h,dpr,m){const g=this.context,cx=w/2,cy=h*.50,tilt=m.tilt,rotation=this.options.angle()*smooth(m.campusLevel-3,m.campusLevel-.4,this.level);g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
+ drawMap(w,h,dpr,m){const g=this.context,cx=w/2,cy=h*.50,tilt=m.tilt,rotation=this.options.angle()*m.bearingFactor;g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
   this.projection.rotate([-this.lon,-this.lat,0]).translate([0,0]).scale(m.radius).clipExtent([[-w*2,-h*3],[w*2,h*3]]);const path=root.d3.geoPath(this.projection,g);
   // Glow follows the actual sphere limb and disappears naturally as it leaves the viewport.
   if(this.level<1.5){const glow=g.createRadialGradient(cx,cy,m.radius*.93,cx,cy,m.radius*1.10);glow.addColorStop(0,'#4688ae00');glow.addColorStop(.6,'#62bfff24');glow.addColorStop(1,'#62bfff00');g.fillStyle=glow;g.fillRect(0,0,w,h);}
   g.save();g.translate(cx,cy);g.scale(1,tilt);g.rotate(rotation);
   const ocean=g.createRadialGradient(-m.radius*.4,-m.radius*.4,m.radius*.05,0,0,m.radius);ocean.addColorStop(0,'#1c4964');ocean.addColorStop(.7,'#10354f');ocean.addColorStop(1,'#081c32');g.beginPath();path({type:'Sphere'});g.fillStyle=this.level<2?ocean:'#173646';g.fill();
   const margin=Math.max(w,h)/m.radius*180/Math.PI*.72;
-  const regional=this.level>=6&&this.lon-margin>117&&this.lon+margin<126&&this.lat-margin>27&&this.lat+margin<36;
+  const availableMargin=Math.min(this.lon-117,126-this.lon,this.lat-27,36-this.lat);
+  const regionBlend=availableMargin>0?smooth(0,.4,1-margin/availableMargin)*smooth(5,7,this.level):0;
+  const regional=regionBlend>0;
   const data=regional?root.AirViewGeo.region:root.AirViewGeo.world;
   g.beginPath();path(data);g.fillStyle=this.level<2?'#416e72':'#294e4e';g.fill();g.strokeStyle=this.level<2?'#78b2b684':'#71b1a18a';g.lineWidth=.75;g.stroke();
   if(this.level<2){g.beginPath();path(this.graticule);g.strokeStyle='#8ab9d21f';g.lineWidth=.65;g.stroke();const shade=g.createRadialGradient(-m.radius*.35,-m.radius*.35,m.radius*.25,m.radius*.18,m.radius*.13,m.radius*1.07);shade.addColorStop(0,'#bfd7ef08');shade.addColorStop(.60,'#010c1b00');shade.addColorStop(1,'#000813b5');g.beginPath();path({type:'Sphere'});g.fillStyle=shade;g.fill();g.strokeStyle='#83d4fa73';g.lineWidth=1;g.stroke();}
-  if(this.level>=2){const span=Math.min(16,Math.max(.008,650/m.radius*180/Math.PI)),step=this.level<5?5:this.level<8?1:this.level<11?.1:.01;const lines=[];for(let lat=Math.floor((this.lat-span)/step)*step;lat<=this.lat+span;lat+=step)lines.push([[this.lon-span,lat],[this.lon+span,lat]]);for(let lon=Math.floor((this.lon-span)/step)*step;lon<=this.lon+span;lon+=step)lines.push([[lon,this.lat-span],[lon,this.lat+span]]);g.beginPath();path({type:'MultiLineString',coordinates:lines});g.strokeStyle='#92c6b818';g.lineWidth=.6;g.stroke();}
+  if(this.level>=2&&!this.options.visuals?.earthReady){const span=Math.min(16,Math.max(.008,650/m.radius*180/Math.PI)),step=this.level<5?5:this.level<8?1:this.level<11?.1:.01;const lines=[];for(let lat=Math.floor((this.lat-span)/step)*step;lat<=this.lat+span;lat+=step)lines.push([[this.lon-span,lat],[this.lon+span,lat]]);for(let lon=Math.floor((this.lon-span)/step)*step;lon<=this.lon+span;lon+=step)lines.push([[lon,this.lat-span],[lon,this.lat+span]]);g.beginPath();path({type:'MultiLineString',coordinates:lines});g.strokeStyle='#92c6b818';g.lineWidth=.6;g.stroke();}
   if(this.level>5){g.beginPath();path(this.campusBoundary);g.fillStyle='#64e4b114';g.fill();g.strokeStyle='#91ffd9';g.lineWidth=1.3;g.setLineDash([5,4]);g.stroke();g.setLineDash([]);}
   g.restore();
-  this.options.visuals?.earth(g,w,h,dpr,this.lon,this.lat,m.radius,1-smooth(1.5,3.3,this.level));
-  const credit=document.querySelector('.geo-credit');credit.textContent=this.level<2&&this.options.visuals?.earthReady?'NASA Blue Marble · 历史合成影像':'Natural Earth · 示意底图';credit.href=this.level<2&&this.options.visuals?.earthReady?'https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-topography-bathymetry/':'https://www.naturalearthdata.com/about/terms-of-use/';
+  // The mask refines coastlines; NASA supplies the same global palette at every scale.
+  const mask=this.landMask;if(mask.width!==Math.round(w)||mask.height!==Math.round(h)){mask.width=Math.round(w);mask.height=Math.round(h);}
+  const mg=mask.getContext('2d');
+  const paintMask=(target,features)=>{const c=target.getContext('2d');c.setTransform(1,0,0,1,0,0);c.fillStyle='#000';c.fillRect(0,0,w,h);c.save();c.translate(cx,cy);c.scale(1,tilt);c.rotate(rotation);c.beginPath();root.d3.geoPath(this.projection,c)(features);c.fillStyle='#fff';c.fill();c.restore();};
+  paintMask(mask,root.AirViewGeo.world);
+  if(regionBlend>0){this.regionMask??=document.createElement('canvas');const rm=this.regionMask;if(rm.width!==mask.width||rm.height!==mask.height){rm.width=mask.width;rm.height=mask.height;}paintMask(rm,root.AirViewGeo.region);mg.globalAlpha=regionBlend;mg.drawImage(rm,0,0);mg.globalAlpha=1;}
+  this.options.visuals?.earth(g,w,h,dpr,this.lon,this.lat,m.radius,1,this.level,tilt,rotation,mask);
+  if(this.level>5){g.save();g.translate(cx,cy);g.scale(1,tilt);g.rotate(rotation);g.beginPath();path(this.campusBoundary);g.strokeStyle='#c5e3b4';g.lineWidth=1.1;g.setLineDash([5,4]);g.stroke();g.restore();}
+  const credit=document.querySelector('.geo-credit');credit.textContent=this.options.visuals?.earthReady?(this.level<4?'NASA Blue Marble · 历史合成影像':'NASA / Natural Earth · 纹理化示意底图'):'Natural Earth · 示意底图';credit.href=this.level<4&&this.options.visuals?.earthReady?'https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-topography-bathymetry/':'https://www.naturalearthdata.com/about/terms-of-use/';
   const project=p=>{const v=this.projection(p),a=rotation;return[cx+v[0]*Math.cos(a)-v[1]*Math.sin(a),cy+(v[0]*Math.sin(a)+v[1]*Math.cos(a))*tilt];};
   const visible=root.d3.geoDistance([this.lon,this.lat],[ANCHOR.lon,ANCHOR.lat])<Math.PI/2-.01;
   const point=project([ANCHOR.lon,ANCHOR.lat]);this.pinPoint=visible?point:null;const pin=document.getElementById('regionPin'),shown=visible&&point[0]>20&&point[0]<w-20&&point[1]>85&&point[1]<h-60&&m.transition<.85;
