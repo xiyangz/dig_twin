@@ -12,6 +12,8 @@ function geometry(width,height,level){
 }
 function localToGeo(x,y){return[ANCHOR.lon+(x-500)/R*180/Math.PI/Math.cos(ANCHOR.lat*Math.PI/180),ANCHOR.lat-(y-500)/R*180/Math.PI];}
 function stage(level,campusLevel){return level<2?'earth':level<7?'region':level<campusLevel-1?'city':'campus';}
+// Convert a screen drag into metres at the current zoom, bearing and camera tilt.
+function panFocus(focus,dx,dy,m,angle){const scale=m.radius/R*Math.max(.1,m.transition),a=angle*m.bearingFactor,c=Math.cos(a),s=Math.sin(a),x=dx/scale,y=dy/(scale*m.tilt);return{x:clamp(focus.x-c*x-s*y,0,1000),y:clamp(focus.y+s*x-c*y,0,1000)};}
 class GlobeNavigation{
  constructor(options){
   this.options=options;this.canvas=options.canvas;this.earth=document.getElementById('earthCanvas');this.context=this.earth.getContext('2d');this.wrap=this.canvas.parentElement;
@@ -39,12 +41,13 @@ class GlobeNavigation{
   document.getElementById('homeView').onclick=()=>{this.options.setAngle(-.60);this.fly('campus');};
   document.getElementById('rotate').onclick=()=>{this.animation=null;if(this.metrics().transition>.1)this.options.setAngle(this.options.angle()+Math.PI/2);else this.lon-=30;this.dirty=true;this.render();};
   this.wrap.addEventListener('wheel',e=>{e.preventDefault();const pixels=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?300:1);this.setLevel((this.animation?this.level:this.target)-clamp(pixels*.006,-1.4,1.4));},{passive:false});
-  this.canvas.addEventListener('keydown',e=>{if(['+','=','ArrowUp','-','_','ArrowDown','Home','Escape'].includes(e.key)){e.preventDefault();if(e.key==='Home')this.fly('earth');else if(e.key==='Escape'){this.animation=null;this.target=this.level;this.render();}else this.setLevel(this.target+(['+','=','ArrowUp'].includes(e.key)?1.1:-1.1));}});
-  this.canvas.addEventListener('pointerdown',e=>{this.animation=null;this.target=this.level;this.canvas.setPointerCapture(e.pointerId);this.pointerMap.set(e.pointerId,[e.clientX,e.clientY]);this.drag={id:e.pointerId,x:e.clientX,y:e.clientY,lon:this.lon,lat:this.lat,angle:this.options.angle(),moved:false};if(this.pointerMap.size===2){const pts=[...this.pointerMap.values()];this.pinch={distance:Math.hypot(pts[1][0]-pts[0][0],pts[1][1]-pts[0][1]),level:this.level};this.drag=null;}});
+  this.canvas.addEventListener('keydown',e=>{const m=this.metrics();if(m.transition>.1&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();this.animation=null;this.target=this.level;const delta={ArrowLeft:[48,0],ArrowRight:[-48,0],ArrowUp:[0,48],ArrowDown:[0,-48]}[e.key];this.focus=panFocus(this.focus,...delta,m,this.options.angle());this.dirty=true;this.render();return;}if(['+','=','ArrowUp','-','_','ArrowDown','Home','Escape'].includes(e.key)){e.preventDefault();if(e.key==='Home')this.fly('earth');else if(e.key==='Escape'){this.animation=null;this.target=this.level;this.render();}else this.setLevel(this.target+(['+','=','ArrowUp'].includes(e.key)?1.1:-1.1));}});
+  this.canvas.addEventListener('contextmenu',e=>{if(this.metrics().transition>.1)e.preventDefault();});
+  this.canvas.addEventListener('pointerdown',e=>{if(e.button>2)return;this.animation=null;this.target=this.level;this.canvas.setPointerCapture(e.pointerId);this.pointerMap.set(e.pointerId,[e.clientX,e.clientY]);this.canvas.style.cursor='grabbing';this.drag={id:e.pointerId,x:e.clientX,y:e.clientY,lon:this.lon,lat:this.lat,angle:this.options.angle(),focus:{...this.focus},metrics:this.metrics(),rotate:e.shiftKey||e.button===2,moved:false};if(this.pointerMap.size===2){const pts=[...this.pointerMap.values()];this.pinch={distance:Math.hypot(pts[1][0]-pts[0][0],pts[1][1]-pts[0][1]),level:this.level};this.drag=null;}});
   this.canvas.addEventListener('pointermove',e=>{if(!this.pointerMap.has(e.pointerId))return;this.pointerMap.set(e.pointerId,[e.clientX,e.clientY]);if(this.pointerMap.size===2&&this.pinch){const pts=[...this.pointerMap.values()],distance=Math.hypot(pts[1][0]-pts[0][0],pts[1][1]-pts[0][1]);this.setLevel(this.pinch.level+Math.log2(Math.max(1,distance)/Math.max(1,this.pinch.distance)));return;}if(!this.drag)return;const dx=e.clientX-this.drag.x,dy=e.clientY-this.drag.y;if(Math.hypot(dx,dy)>5)this.drag.moved=true;if(!this.drag.moved)return;
-   if(this.metrics().transition>.1)this.options.setAngle(this.drag.angle+dx*.006);else{const sensitivity=100/this.metrics().radius;this.lon=this.drag.lon-dx*sensitivity;this.lat=clamp(this.drag.lat+dy*sensitivity,-80,80);}this.dirty=true;this.render();});
-  const release=e=>{const d=this.drag;this.pointerMap.delete(e.pointerId);this.drag=null;this.pinch=null;if(e.type==='pointerup'&&d&&!d.moved){const r=this.canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;if(this.metrics().transition>.8)this.options.selectAt(x,y);else if(this.pinPoint&&Math.hypot(this.pinPoint[0]-x,this.pinPoint[1]-y)<50)this.fly('campus');}};
-  this.canvas.addEventListener('pointerup',release);this.canvas.addEventListener('pointercancel',release);this.canvas.addEventListener('lostpointercapture',e=>{this.pointerMap.delete(e.pointerId);if(!this.pointerMap.size){this.drag=null;this.pinch=null;}});
+   if(this.drag.metrics.transition>.1){if(this.drag.rotate)this.options.setAngle(this.drag.angle+dx*.006);else this.focus=panFocus(this.drag.focus,dx,dy,this.drag.metrics,this.drag.angle);}else{const sensitivity=100/this.metrics().radius;this.lon=this.drag.lon-dx*sensitivity;this.lat=clamp(this.drag.lat+dy*sensitivity,-80,80);}this.dirty=true;this.render();});
+  const release=e=>{const d=this.drag;this.pointerMap.delete(e.pointerId);this.drag=null;this.pinch=null;this.canvas.style.cursor='grab';if(e.type==='pointerup'&&e.button===0&&d&&!d.moved&&!d.rotate){const r=this.canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;if(this.metrics().transition>.8)this.options.selectAt(x,y);else if(this.pinPoint&&Math.hypot(this.pinPoint[0]-x,this.pinPoint[1]-y)<50)this.fly('campus');}};
+  this.canvas.addEventListener('pointerup',release);this.canvas.addEventListener('pointercancel',release);this.canvas.addEventListener('lostpointercapture',e=>{this.pointerMap.delete(e.pointerId);if(!this.pointerMap.size){this.drag=null;this.pinch=null;this.canvas.style.cursor='grab';}});
  }
  render(){const {width:w,height:h,dpr}=this.options.dimensions();if(w<=0||h<=0)return;const m=geometry(w,h,this.level);this.level=m.level;this.target=clamp(this.target,0,m.maxLevel);this.canvas.style.opacity=m.transition;this.earth.style.opacity=this.options.visuals?.earthReady?1:1-smooth(.6,1,m.transition);
   if(m.transition>0)this.options.drawCampus(m.campusZoom,m.tilt,this.options.angle()*m.bearingFactor,{x:500+(this.focus.x-500)*m.transition,y:500+(this.focus.y-500)*m.transition});else this.options.clearCampus();
@@ -53,12 +56,12 @@ class GlobeNavigation{
   if(this.lastAngle!==this.options.angle()){this.lastAngle=this.options.angle();this.dirty=true;}
   if(this.dirty){this.drawMap(w,h,dpr,m);this.dirty=false;}
   const titles={earth:'地球视角',region:'上海所在区域',city:'上海 · 园区定位',campus:'青岚科技园'};
-  document.getElementById('geoStage').textContent=titles[current];document.getElementById('geoHint').textContent=this.animation?'正在沿地理锚点平滑缩放…':current==='campus'?'滚轮缩放 · 拖动旋转 · 定位终端可查看细节':current==='earth'?'滚轮放大，或点击上海标记进入园区':'影像风格示意底图 · 继续放大进入合成园区';
+  document.getElementById('geoStage').textContent=titles[current];document.getElementById('geoHint').textContent=this.animation?'正在沿地理锚点平滑缩放…':current==='campus'?'拖动平移 · Shift/右键拖动旋转 · 滚轮缩放':current==='earth'?'滚轮放大，或点击上海标记进入园区':'影像风格示意底图 · 继续放大进入合成园区';
   document.getElementById('geoZoom').value=String(this.level/m.maxLevel*100);document.getElementById('geoZoom').setAttribute('aria-valuetext',titles[current]);
   document.querySelectorAll('[data-geo-view]').forEach(b=>{const on=b.dataset.geoView===current||(b.dataset.geoView==='city'&&current==='region');b.classList.toggle('active',on);b.setAttribute('aria-pressed',String(on));});
   document.getElementById('geoStatus').textContent=current==='campus'?'园区 · '+m.campusZoom.toFixed(1)+'×':'上海假设锚点 · WGS84';
   document.querySelector('.scene-meta').textContent=current==='campus'?(this.options.visuals?.ready?'3D · 午后日光 · 假设场景':'2.5D · 兼容模式'):'地球 → 上海 → 园区';
-  this.canvas.setAttribute('aria-label','地球与上海园区导航，当前'+titles[current]+'。加减键缩放，Home 返回地球，Escape 停止飞行。');
+  this.canvas.setAttribute('aria-label','地球与上海园区导航，当前'+titles[current]+'。园区内拖动或方向键平移，Shift 或右键拖动旋转，加减键缩放，Home 返回地球，Escape 停止飞行。');
  }
  drawMap(w,h,dpr,m){const g=this.context,cx=w/2,cy=h*.50,tilt=m.tilt,rotation=this.options.angle()*m.bearingFactor;g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
   const focusGeo=localToGeo(this.focus.x,this.focus.y),centerLon=this.lon+(focusGeo[0]-ANCHOR.lon)*m.transition,centerLat=this.lat+(focusGeo[1]-ANCHOR.lat)*m.transition;this.projection.rotate([-centerLon,-centerLat,0]).translate([0,0]).scale(m.radius).clipExtent([[-w*2,-h*3],[w*2,h*3]]);const path=root.d3.geoPath(this.projection,g);
@@ -96,5 +99,5 @@ class GlobeNavigation{
   document.getElementById('geoScaleLine').style.width=pixels+'px';document.getElementById('geoScaleText').textContent=distance>=1000?`${distance/1000} km`:`${distance} m`;
  }
 }
-root.AirViewGlobe={GlobeNavigation,geometry,localToGeo,stage,ANCHOR,R};if(typeof module!=='undefined')module.exports=root.AirViewGlobe;
+root.AirViewGlobe={GlobeNavigation,geometry,localToGeo,stage,panFocus,ANCHOR,R};if(typeof module!=='undefined')module.exports=root.AirViewGlobe;
 })(typeof window!=='undefined'?window:globalThis);

@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const {geometry,localToGeo,stage,ANCHOR,R}=require('../dist/globe.js');
+const {geometry,localToGeo,stage,panFocus,ANCHOR,R}=require('../dist/globe.js');
 for(const [w,h]of [[700,720],[340,440],[1250,650]]){
  const initial=geometry(w,h,0),near=geometry(w,h,initial.campusLevel);
  assert.equal(initial.transition,0);assert.equal(near.transition,1);assert(Math.abs(near.campusZoom-1)<1e-12);
@@ -8,6 +8,13 @@ for(const [w,h]of [[700,720],[340,440],[1250,650]]){
  let previous=0;for(let level=0;level<=initial.maxLevel;level+=.01){const m=geometry(w,h,level);assert(Number.isFinite(m.radius));assert(m.transition>=previous);previous=m.transition;assert(m.tilt>=.57&&m.tilt<=1);}
  assert.equal(geometry(w,h,-100).level,0);assert.equal(geometry(w,h,100).level,initial.maxLevel);
  assert(Math.abs(geometry(w,h,100).campusZoom/(2**1.25)-2)<1e-12,'Maximum magnification doubles the previous limit');
+ for(const zoom of [near.campusLevel-1,near.campusLevel,initial.maxLevel])for(const angle of [-.6,0,Math.PI/2,Math.PI]){
+  const m=geometry(w,h,zoom),focus={x:500,y:500},next=panFocus(focus,8,-6,m,angle),a=angle*m.bearingFactor,scale=m.radius/R*m.transition;
+  const dx=focus.x-next.x,dy=focus.y-next.y;
+  assert(Math.abs((dx*Math.cos(a)-dy*Math.sin(a))*scale-8)<1e-9,'Horizontal pan tracks the pointer at every bearing and zoom');
+  assert(Math.abs((dx*Math.sin(a)+dy*Math.cos(a))*scale*m.tilt+6)<1e-9,'Vertical pan compensates for camera tilt');
+ }
+ const edge=panFocus({x:500,y:500},1e8,1e8,near,0);assert.deepEqual(edge,{x:0,y:0},'Pan center remains within the campus');
 }
 assert.deepEqual(localToGeo(500,500),[ANCHOR.lon,ANCHOR.lat]);assert(localToGeo(1000,500)[0]>ANCHOR.lon);assert(localToGeo(500,0)[1]>ANCHOR.lat);
 const sandbox={};sandbox.window=sandbox;vm.createContext(sandbox);for(const file of ['vendor/d3-array.min.js','vendor/d3-geo.min.js','geo-data.js'])vm.runInContext(fs.readFileSync('dist/'+file,'utf8'),sandbox);

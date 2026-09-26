@@ -2,3 +2,5 @@
 .region-pin.label-left{flex-direction:row-reverse;transform:translate(calc(-100% + 6px),-50%);text-align:right}
 
 .coverage-scale[hidden]{display:none}.canvas-wrap[data-geo-stage=campus]{background:radial-gradient(ellipse at 45% 28%,#53656a 0%,#33464a 60%,#1b2e35 100%)}.canvas-wrap[data-geo-stage=campus] .scene-top{background:#182b2e9e;border-radius:5px;padding:6px 9px;backdrop-filter:blur(5px)}.canvas-wrap[data-geo-stage=campus] .compass{color:#e0e7d7}.canvas-wrap[data-geo-stage=campus] .scene-legend{background:#182b2ec9;padding:6px 9px;border-radius:4px;color:#d1dccf}.canvas-wrap[data-geo-stage=campus] .coverage-scale{background:#172c31d9;padding:7px;border-radius:4px}
+
+#sceneCanvas{cursor:grab;touch-action:none}
