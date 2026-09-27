@@ -1,5 +1,8 @@
 const assert=require('node:assert/strict');
 const {TwinSimulation,crosses,crosses3D,BUILDINGS,BASES}=require('../dist/simulation.js');
+const {SCENE,inside,OPEN_ROUTES}=require('../dist/scene-config.js');
+for(const b of BASES)for(let a=0;a<Math.PI*2;a+=.01)assert(inside(b.x+400*Math.cos(a),b.y+400*Math.sin(a)),'Entire 400 m disk belongs to the scene');
+for(const route of OPEN_ROUTES){assert(!inside(...route.points[0])&&!inside(...route.points[1]));assert(inside(...route.entry)&&inside(...route.exit));}
 for(const base of BASES){const roof=BUILDINGS[base.building];assert(base.x>roof.x&&base.x<roof.x+roof.w);assert(base.y>roof.y&&base.y<roof.y+roof.d);assert(base.baseZ>=roof.h&&base.z>base.baseZ);assert(!crosses3D(base,{x:base.x+150,y:base.y,z:base.z},roof),'An elevated ray does not intersect its own roof');assert(crosses3D(base,{x:base.x,y:base.y,z:2},roof),'Downward indoor link enters the building');}
 for(const scenario of ['campus','shadow','hotspot','indoor']){
  const s=new TwinSimulation({scenario}),indoor=s.users.filter(u=>u.environment==='indoor');assert.equal(indoor.length,4);assert.equal(indoor.filter(u=>u.speed>0).length,2);
@@ -13,7 +16,7 @@ assert(!crosses(0,0,100,0,{x:30,y:30,w:40,d:40}));
 for(const direction of ['DL','UL'])for(const scheduler of ['PF','RR','MAX']){
  const sim=new TwinSimulation({direction,scheduler,load:200});sim.step(8000);
  for(const u of sim.users){
-  const accounted=u.queue+u.pending.reduce((n,p)=>n+(p?p.bits:0),0)+u.totalDelivered+u.totalDropped;
+  const accounted=u.queue+u.pending.reduce((n,p)=>n+(p?p.bits:0),0)+u.totalDelivered+u.totalDropped+u.totalExited;
   assert(Math.abs(u.totalGenerated-accounted)<.02,`bit conservation ${direction} ${scheduler} ${u.name}`);
   assert(u.queue>=-1e-6&&u.prbs>=0&&u.prbs<=51);
   for(const p of u.pending)if(p)assert(p.round<=4&&p.prbs>0&&p.bits>0);
@@ -23,7 +26,15 @@ for(const direction of ['DL','UL'])for(const scheduler of ['PF','RR','MAX']){
  console.log(`${direction} ${scheduler}: ${sim.stats.rate.toFixed(2)} Mbps; conservation and resource bounds passed`);
 }
 const a=new TwinSimulation(),b=new TwinSimulation();a.step(4000);b.step(4000);assert.deepEqual(a.snapshot(),b.snapshot());
-const shadow=new TwinSimulation({scenario:'shadow',mobility:false}),clear=new TwinSimulation({scenario:'shadow',blockage:false,mobility:false});assert(shadow.users[0].sinr<clear.users[0].sinr);shadow.step(4000);clear.step(4000);assert(shadow.users[4].efficiency<clear.users[4].efficiency);assert(shadow.users[4].bler>clear.users[4].bler);
-const moving=new TwinSimulation({scenario:'shadow'}),start=moving.users[0].y;moving.step(2000);assert.notEqual(moving.users[0].y,start);moving.config.mobility=false;const point={x:moving.users[0].x,y:moving.users[0].y};moving.step(2000);assert.deepEqual({x:moving.users[0].x,y:moving.users[0].y},point);
+const shadow=new TwinSimulation({scenario:'shadow',mobility:false,boundaryFlow:false}),clear=new TwinSimulation({scenario:'shadow',blockage:false,mobility:false,boundaryFlow:false});assert(shadow.users[0].sinr<clear.users[0].sinr);shadow.step(4000);clear.step(4000);assert(shadow.users[4].efficiency<clear.users[4].efficiency);assert(shadow.users[4].bler>clear.users[4].bler);
+const moving=new TwinSimulation({scenario:'shadow',boundaryFlow:false}),start=moving.users[0].y;moving.step(2000);assert.notEqual(moving.users[0].y,start);moving.config.mobility=false;const point={x:moving.users[0].x,y:moving.users[0].y};moving.step(2000);assert.deepEqual({x:moving.users[0].x,y:moving.users[0].y},point);
 const low=new TwinSimulation({load:20,mobility:false}),high=new TwinSimulation({load:250,mobility:false});low.step(4000);high.step(4000);assert(high.users.reduce((n,u)=>n+u.queue,0)>low.users.reduce((n,u)=>n+u.queue,0));
 a.reset();a.step(1);assert.equal(a.time,.0005);console.log('Determinism, blockage response, mobility freeze, congestion, reset and single-slot stepping passed');
+const flow=new TwinSimulation();assert.equal(flow.activeUsers.length,10);flow.step(4000);assert.equal(flow.flow.exited,1);assert.equal(flow.activeUsers.length,9);
+const departed=flow.users[0],arriving=flow.users[2];assert(!departed.active&&departed.queue===0&&departed.pending.every(p=>p===null));assert(!arriving.active&&arriving.totalGenerated===0&&arriving.prbs===0);
+const exitedGenerated=departed.totalGenerated;flow.step(2000);assert(arriving.active&&arriving.totalGenerated>0);assert.equal(departed.totalGenerated,exitedGenerated);assert(flow.flow.entered>0);
+flow.config.mobility=false;const frozenFlow=JSON.stringify(flow.users.map(u=>[u.x,u.y,u.active,u.waitRemaining]));flow.step(2000);assert.equal(JSON.stringify(flow.users.map(u=>[u.x,u.y,u.active,u.waitRemaining])),frozenFlow);
+flow.config.mobility=true;const oldName=departed.name;flow.step(80000);assert.notEqual(departed.name,oldName);assert(departed.active,'A new UE later enters through the same road');assert.equal(new Set(flow.users.map(u=>u.name)).size,12);
+for(const u of flow.users){assert.equal(u.active,inside(u.x,u.y));const accounted=u.queue+u.pending.reduce((n,p)=>n+(p?p.bits:0),0)+u.totalDelivered+u.totalDropped+u.totalExited;assert(Math.abs(u.totalGenerated-accounted)<.1,'Conservation across exit and next arrival');if(!u.active)assert(u.queue===0&&u.prbs===0&&u.pending.every(p=>p===null));}
+assert(flow.users.slice(8).every(u=>u.active));const closed=new TwinSimulation({boundaryFlow:false});closed.step(8000);assert.equal(closed.activeUsers.length,12);assert.equal(closed.flow.entered+closed.flow.exited,0);
+console.log('400 m extents, entry/exit, inactive scheduling, queue release, new arrivals and boundary-flow freeze passed');

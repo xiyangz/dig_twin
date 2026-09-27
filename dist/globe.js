@@ -1,25 +1,26 @@
 /* Earth-to-campus navigation. Geographic geometry: Natural Earth; hypothetical Shanghai anchor. */
 (function(root){
 'use strict';
+const {SCENE,boundary}=root.AirViewScene||(typeof require!=='undefined'?require('./scene-config.js'):{});
 const R=6371000,ANCHOR={lon:121.6,lat:31.2,name:'上海 · 青岚科技园'};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
 function geometry(width,height,level){
- const baseRadius=Math.min(width*.39,height*.33),campusScale=Math.min(width/1510,height/1130);
+ const baseRadius=Math.min(width*.39,height*.33),campusScale=Math.min(width/SCENE.viewWidth,height/SCENE.viewHeight);
  const campusLevel=Math.log2(R*campusScale/baseRadius);
- const z=clamp(level,0,campusLevel+2.25),transition=smooth(campusLevel-2,campusLevel-.15,z);
- return{level:z,baseRadius,radius:baseRadius*2**z,campusLevel,maxLevel:campusLevel+2.25,campusZoom:2**(z-campusLevel),transition,bearingFactor:smooth(campusLevel-3,campusLevel-.4,z),tilt:1-.43*smooth(campusLevel-3,campusLevel-.4,z)};
+ const z=clamp(level,0,campusLevel+2.25+Math.log2(SCENE.width/1000)),transition=smooth(campusLevel-2,campusLevel-.15,z);
+ return{level:z,baseRadius,radius:baseRadius*2**z,campusLevel,maxLevel:campusLevel+2.25+Math.log2(SCENE.width/1000),campusZoom:2**(z-campusLevel),transition,bearingFactor:smooth(campusLevel-3,campusLevel-.4,z),tilt:1-.43*smooth(campusLevel-3,campusLevel-.4,z)};
 }
 function localToGeo(x,y){return[ANCHOR.lon+(x-500)/R*180/Math.PI/Math.cos(ANCHOR.lat*Math.PI/180),ANCHOR.lat-(y-500)/R*180/Math.PI];}
 function stage(level,campusLevel){return level<2?'earth':level<7?'region':level<campusLevel-1?'city':'campus';}
 // Convert a screen drag into metres at the current zoom, bearing and camera tilt.
-function panFocus(focus,dx,dy,m,angle){const scale=m.radius/R*Math.max(.1,m.transition),a=angle*m.bearingFactor,c=Math.cos(a),s=Math.sin(a),x=dx/scale,y=dy/(scale*m.tilt);return{x:clamp(focus.x-c*x-s*y,0,1000),y:clamp(focus.y+s*x-c*y,0,1000)};}
+function panFocus(focus,dx,dy,m,angle){const scale=m.radius/R*Math.max(.1,m.transition),a=angle*m.bearingFactor,c=Math.cos(a),s=Math.sin(a),x=dx/scale,y=dy/(scale*m.tilt);return{x:clamp(focus.x-c*x-s*y,SCENE.minX,SCENE.maxX),y:clamp(focus.y+s*x-c*y,SCENE.minY,SCENE.maxY)};}
 class GlobeNavigation{
  constructor(options){
   this.options=options;this.canvas=options.canvas;this.earth=document.getElementById('earthCanvas');this.context=this.earth.getContext('2d');this.wrap=this.canvas.parentElement;
-  this.focus={x:500,y:500};this.level=0;this.target=0;this.lon=108;this.lat=24;this.animation=null;this.raf=0;this.previous=0;this.dirty=true;this.frozen=false;this.pointerMap=new Map();this.drag=null;this.pinch=null;this.reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  this.focus={...SCENE.center};this.level=0;this.target=0;this.lon=108;this.lat=24;this.animation=null;this.raf=0;this.previous=0;this.dirty=true;this.frozen=false;this.pointerMap=new Map();this.drag=null;this.pinch=null;this.reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
   this.projection=root.d3.geoOrthographic().precision(.5);this.graticule=root.d3.geoGraticule10();this.landMask=document.createElement('canvas');
-  this.campusBoundary={type:'LineString',coordinates:[[0,0],[1000,0],[1000,1000],[0,1000],[0,0]].map(p=>localToGeo(...p))};
+  this.campusBoundary={type:'LineString',coordinates:boundary.map(p=>localToGeo(...p))};
   this.bind();this.render();
  }
  state(){const {width,height}=this.options.dimensions(),m=geometry(width,height,this.level);return{view:stage(this.level,m.campusLevel),zoomLevel:+this.level.toFixed(3),campusLevel:+m.campusLevel.toFixed(3),maxZoomLevel:+m.maxLevel.toFixed(3),campusMagnification:+m.campusZoom.toFixed(3),focus:{...this.focus},campusOpacity:+m.transition.toFixed(3),animating:!!this.animation||Math.abs(this.target-this.level)>.002,anchor:{...ANCHOR,hypothetical:true}};}
@@ -31,8 +32,8 @@ class GlobeNavigation{
  }
  request(){if(!this.raf)this.raf=requestAnimationFrame(t=>this.frame(t));}
  setLevel(value){if(!Number.isFinite(value))throw Error('缩放值必须为有限数值');const m=this.metrics();this.animation=null;this.target=clamp(value,0,m.maxLevel);if(this.reduceMotion){this.level=this.target;if(this.target>1.5){this.lon=ANCHOR.lon;this.lat=ANCHOR.lat;}this.dirty=true;this.render();}else this.request();}
- focusAt(x,y){this.focus={x:clamp(x,0,1000),y:clamp(y,0,1000)};this.lon=ANCHOR.lon;this.lat=ANCHOR.lat;this.dirty=true;this.setLevel(Math.max(this.metrics().campusLevel+.8,this.level));this.render();}
- fly(view){this.focus={x:500,y:500};this.dirty=true;if(!['earth','region','city','campus'].includes(view))throw Error('未知视图');const m=this.metrics(),to={earth:0,region:5.7,city:9,campus:m.campusLevel}[view];if(this.reduceMotion){this.setLevel(to);return this.state();}this.target=to;this.animation={from:this.level,to,lon:this.lon,lat:this.lat,start:performance.now(),duration:clamp(Math.abs(to-this.level)*430,900,6500)};this.request();return this.state();}
+ focusAt(x,y){this.focus={x:clamp(x,SCENE.minX,SCENE.maxX),y:clamp(y,SCENE.minY,SCENE.maxY)};this.lon=ANCHOR.lon;this.lat=ANCHOR.lat;this.dirty=true;this.setLevel(Math.max(this.metrics().campusLevel+.8,this.level));this.render();}
+ fly(view){this.focus={...SCENE.center};this.dirty=true;if(!['earth','region','city','campus'].includes(view))throw Error('未知视图');const m=this.metrics(),to={earth:0,region:5.7,city:9,campus:m.campusLevel}[view];if(this.reduceMotion){this.setLevel(to);return this.state();}this.target=to;this.animation={from:this.level,to,lon:this.lon,lat:this.lat,start:performance.now(),duration:clamp(Math.abs(to-this.level)*430,900,6500)};this.request();return this.state();}
  bind(){
   document.querySelectorAll('[data-geo-view]').forEach(b=>b.onclick=()=>this.fly(b.dataset.geoView));
   document.getElementById('focusCampus').onclick=()=>this.fly('campus');document.getElementById('regionPin').onclick=()=>this.fly('campus');
@@ -59,7 +60,7 @@ class GlobeNavigation{
   document.getElementById('geoStage').textContent=titles[current];document.getElementById('geoHint').textContent=this.animation?'正在沿地理锚点平滑缩放…':current==='campus'?'拖动平移 · Shift/右键拖动旋转 · 滚轮缩放':current==='earth'?'滚轮放大，或点击上海标记进入园区':'影像风格示意底图 · 继续放大进入合成园区';
   document.getElementById('geoZoom').value=String(this.level/m.maxLevel*100);document.getElementById('geoZoom').setAttribute('aria-valuetext',titles[current]);
   document.querySelectorAll('[data-geo-view]').forEach(b=>{const on=b.dataset.geoView===current||(b.dataset.geoView==='city'&&current==='region');b.classList.toggle('active',on);b.setAttribute('aria-pressed',String(on));});
-  document.getElementById('geoStatus').textContent=current==='campus'?'园区 · '+m.campusZoom.toFixed(1)+'×':'上海假设锚点 · WGS84';
+  document.getElementById('geoStatus').textContent=current==='campus'?'1.4 × 1.4 km · '+m.campusZoom.toFixed(1)+'×':'上海假设锚点 · WGS84';
   document.querySelector('.scene-meta').textContent=current==='campus'?(this.options.visuals?.ready?'3D · 午后日光 · 假设场景':'2.5D · 兼容模式'):'地球 → 上海 → 园区';
   this.canvas.setAttribute('aria-label','地球与上海园区导航，当前'+titles[current]+'。园区内拖动或方向键平移，Shift 或右键拖动旋转，加减键缩放，Home 返回地球，Escape 停止飞行。');
  }

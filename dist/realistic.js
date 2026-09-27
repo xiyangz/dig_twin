@@ -1,7 +1,7 @@
 /* Display-only 3D renderer. All buildings and UE positions come from AirView's model. */
 (function(root){
 'use strict';
-const T=root.THREE;
+const T=root.THREE,{SCENE,OUTDOOR_ROADS}=root.AirViewScene;
 class RealisticView {
  constructor(buildings,bases,onReady){
   this.ready=false;this.earthReady=false;this.batches=new Map();this.materials=new Map();
@@ -15,7 +15,7 @@ class RealisticView {
   this.scene=new T.Scene();this.camera=new T.OrthographicCamera(-800,800,600,-600,.1,5000);
   this.scene.add(new T.HemisphereLight(0xc8dff1,0x697962,2.0));
   const sun=new T.DirectionalLight(0xfff8ec,3.1);sun.position.set(-420,700,-320);sun.castShadow=true;
-  Object.assign(sun.shadow.camera,{left:-830,right:830,top:830,bottom:-830,near:50,far:1900});
+  Object.assign(sun.shadow.camera,{left:-1250,right:1250,top:1250,bottom:-1250,near:20,far:2400});
   sun.shadow.mapSize.set(2048,2048);sun.shadow.bias=-.0003;sun.shadow.normalBias=.6;sun.shadow.radius=3;
   this.scene.add(sun);this.sun=sun;
   this.makeGround();this.flushBatches();this.buildingGroups=buildings.map((b,i)=>{const group=new T.Group();this.makeBuilding(b,i);this.flushBatches(group);this.scene.add(group);return group;});
@@ -25,7 +25,7 @@ class RealisticView {
   this.heatCanvas=document.createElement('canvas');this.heatCanvas.width=this.heatCanvas.height=250;
   this.heatTexture=new T.CanvasTexture(this.heatCanvas);this.heatTexture.colorSpace=T.SRGBColorSpace;
   const heatMaterial=new T.MeshBasicMaterial({map:this.heatTexture,transparent:true,opacity:.55,depthWrite:false});
-  this.heat=new T.Mesh(new T.PlaneGeometry(1000,1000),heatMaterial);this.heat.rotation.x=-Math.PI/2;this.heat.position.y=.85;this.heat.renderOrder=1;this.scene.add(this.heat);
+  this.heat=new T.Mesh(new T.PlaneGeometry(SCENE.width,SCENE.height),heatMaterial);this.heat.rotation.x=-Math.PI/2;this.heat.position.set(SCENE.center.x-500,.85,SCENE.center.y-500);this.heat.renderOrder=1;this.scene.add(this.heat);
   this.earthScene=new T.Scene();this.earthCamera=new T.OrthographicCamera(-2,2,2,-2,.1,20);
   this.earthScene.add(new T.AmbientLight(0xb7d1ea,.8));this.earthSun=new T.DirectionalLight(0xffffff,2.2);this.earthScene.add(this.earthSun);
   const loader=new T.TextureLoader();loader.load('assets/earth-blue-marble-may.jpg',texture=>{
@@ -44,17 +44,17 @@ class RealisticView {
  flushBatches(target=this.scene){const geo=new T.BoxGeometry(1,1,1),dummy=new T.Object3D();for(const [mat,boxes]of this.batches){const mesh=new T.InstancedMesh(geo,target===this.scene?mat:mat.clone(),boxes.length);boxes.forEach((b,i)=>{dummy.position.set(b.x,b.y,b.z);dummy.scale.set(b.w,b.h,b.d);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);});mesh.castShadow=true;mesh.receiveShadow=true;target.add(mesh);}this.batches.clear();}
  plane(x,y,w,d,color,z=0){this.box(x,y,w,d,.25,color,z);}
  makeGround(){
-  this.box(-20,-20,1040,1040,7,'#81816f',-7);
+  this.box(SCENE.minX-20,SCENE.minY-20,SCENE.width+40,SCENE.height+40,7,'#81816f',-7);
   const textureCanvas=document.createElement('canvas');textureCanvas.width=textureCanvas.height=256;
   const g=textureCanvas.getContext('2d');g.fillStyle='#63875b';g.fillRect(0,0,256,256);
   let seed=41;const rand=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
   for(let i=0;i<11000;i++){g.fillStyle=rand()>.5?'#97b68130':'#485f4825';g.fillRect(rand()*256,rand()*256,1+rand()*2,1+rand()*2);}
   const tex=new T.CanvasTexture(textureCanvas);tex.colorSpace=T.SRGBColorSpace;tex.wrapS=tex.wrapT=T.RepeatWrapping;tex.repeat.set(12,12);
-  const grass=new T.Mesh(new T.PlaneGeometry(1040,1040),new T.MeshStandardMaterial({map:tex,roughness:1}));grass.rotation.x=-Math.PI/2;grass.position.y=.15;grass.receiveShadow=true;this.scene.add(grass);
+  const grass=new T.Mesh(new T.PlaneGeometry(SCENE.width+40,SCENE.height+40),new T.MeshStandardMaterial({map:tex,roughness:1}));grass.rotation.x=-Math.PI/2;grass.position.set(SCENE.center.x-500,.15,SCENE.center.y-500);grass.receiveShadow=true;this.scene.add(grass);
   // Wide curb, paving, asphalt, then painted markings. Dimensions remain in metres.
-  for(const x of [90,630,940]){this.plane(x-27,60,54,900,'#bfc0b6',.25);this.plane(x-20,60,40,900,'#565b5c',.5);for(let y=70;y<950;y+=26)this.plane(x-.65,y,1.3,13,'#d9cf9e',.79);for(const dx of [-18,18])this.plane(x+dx,60,.65,900,'#d5d6c9',.78);}
-  for(const y of [90,360,650,930]){this.plane(60,y-26,900,52,'#bfc0b6',.3);this.plane(60,y-18,900,36,'#565b5c',.55);for(let x=70;x<950;x+=26)this.plane(x,y-.6,13,1.2,'#d9cf9e',.8);for(const dy of [-16,16])this.plane(60,y+dy,900,.65,'#d5d6c9',.79);}
-  for(const x of [90,630,940])for(const y of [90,360,650,930]){
+  for(const x of OUTDOOR_ROADS.vertical){this.plane(x-27,SCENE.minY,54,SCENE.height,'#bfc0b6',.25);this.plane(x-20,SCENE.minY,40,SCENE.height,'#565b5c',.5);for(let y=SCENE.minY;y<SCENE.maxY-13;y+=26)this.plane(x-.65,y,1.3,13,'#d9cf9e',.79);for(const dx of [-18,18])this.plane(x+dx,SCENE.minY,.65,SCENE.height,'#d5d6c9',.78);}
+  for(const y of OUTDOOR_ROADS.horizontal){this.plane(SCENE.minX,y-26,SCENE.width,52,'#bfc0b6',.3);this.plane(SCENE.minX,y-18,SCENE.width,36,'#565b5c',.55);for(let x=SCENE.minX;x<SCENE.maxX-13;x+=26)this.plane(x,y-.6,13,1.2,'#d9cf9e',.8);for(const dy of [-16,16])this.plane(SCENE.minX,y+dy,SCENE.width,.65,'#d5d6c9',.79);}
+  for(const x of OUTDOOR_ROADS.vertical)for(const y of OUTDOOR_ROADS.horizontal){
    this.plane(x-20,y-18,40,36,'#565b5c',.82);
    for(let i=-12;i<=12;i+=6){this.plane(x+i,y+26,3,9,'#e5e4d8',.85);this.plane(x+29,y+i,9,3,'#e5e4d8',.85);}
   }
@@ -100,7 +100,7 @@ class RealisticView {
  }
  car(x,y,i){const colors=['#e1e0d7','#737f89','#ad7461','#dadbcf'];this.box(x,y,6,14,3,colors[i%4],1,.3,.15);this.box(x+.5,y+3,5,7,2,'#47616a',4,.24,.25);for(const dx of [-.6,5.6])for(const dy of [2,10])this.box(x+dx,y+dy,1,2.5,2.5,'#303536',.7);}
  makeLandscape(){
-  const treeLocations=[];
+  const treeLocations=[];for(let x=160;x<1230;x+=65)treeLocations.push([x,-260],[x,1030]);for(let y=-100;y<950;y+=65)treeLocations.push([1350,y]);
   for(let i=0;i<25;i++){treeLocations.push([135+i*31,393],[135+i*31,965]);}
   for(let i=0;i<21;i++){treeLocations.push([43,125+i*38],[983,125+i*38]);}
   for(let i=0;i<12;i++)treeLocations.push([125+i*39,320],[135+i*39,693]);
@@ -126,11 +126,11 @@ class RealisticView {
  }
  campus(g,w,h,dpr,angle,zoom,tilt,users,heatVisible,heatCells,selected,indoorView,buildings,focus){
   if(!this.ready)return false;this.size(w,h,dpr);
-  const scale=Math.min(w/1510,h/1130)*zoom,t=Math.min(.99999,tilt),horizontal=Math.sqrt(1-t*t),cam=this.camera;
+  const scale=Math.min(w/SCENE.viewWidth,h/SCENE.viewHeight)*zoom,t=Math.min(.99999,tilt),horizontal=Math.sqrt(1-t*t),cam=this.camera;
   cam.left=-w/scale/2;cam.right=w/scale/2;cam.top=h/scale/2;cam.bottom=-h/scale/2;
   const fx=focus.x-500,fy=focus.y-500;cam.position.set(fx+Math.sin(angle)*horizontal*1800,t*1800,fy+Math.cos(angle)*horizontal*1800);cam.lookAt(fx,0,fy);cam.updateProjectionMatrix();cam.updateMatrixWorld();
-  this.setIndoorView(users[selected],indoorView,buildings);users.forEach((u,i)=>{const m=this.users[i],dx=u.x-(m.userData.x??u.x),dy=u.y-(m.userData.y??u.y);if(Math.hypot(dx,dy)>.001)m.rotation.y=Math.atan2(dx,dy);m.scale.setScalar(u.environment==='indoor'?.35:1);m.position.set(u.x-500,u.z-1,u.y-500);m.userData={x:u.x,y:u.y};});
-  this.heat.visible=heatVisible;if(heatVisible&&this.lastHeat!==heatCells){const c=this.heatCanvas.getContext('2d');c.clearRect(0,0,250,250);for(const cell of heatCells){c.fillStyle=cell.color;c.fillRect(cell.x/4,cell.y/4,10,10);}this.heatTexture.needsUpdate=true;this.lastHeat=heatCells;}
+  this.setIndoorView(users[selected],indoorView,buildings);users.forEach((u,i)=>{const m=this.users[i],dx=u.x-(m.userData.x??u.x),dy=u.y-(m.userData.y??u.y);if(Math.hypot(dx,dy)>.001)m.rotation.y=Math.atan2(dx,dy);m.visible=u.active;m.scale.setScalar(u.environment==='indoor'?.35:1);m.position.set(u.x-500,u.z-1,u.y-500);m.userData={x:u.x,y:u.y};});
+  this.heat.visible=heatVisible;if(heatVisible&&this.lastHeat!==heatCells){const c=this.heatCanvas.getContext('2d');c.clearRect(0,0,250,250);for(const cell of heatCells){c.fillStyle=cell.color;c.fillRect((cell.x-SCENE.minX)/SCENE.width*250,(cell.y-SCENE.minY)/SCENE.height*250,40/SCENE.width*250+.2,40/SCENE.height*250+.2);}this.heatTexture.needsUpdate=true;this.lastHeat=heatCells;}
   this.renderer.setClearColor(0x000000,0);this.renderer.render(this.scene,cam);g.drawImage(this.renderer.domElement,0,0,w,h);return true;
  }
  project(x,y,z=0){const p=new T.Vector3(x-500,z,y-500).project(this.camera);return{x:(p.x+1)*this.width/2,y:(1-p.y)*this.height/2};}

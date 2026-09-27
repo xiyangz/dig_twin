@@ -8,3 +8,5 @@
 .ue-location{font-size:11px;color:#9ab6ba;line-height:1.6;margin:0 0 10px}.locate-button{margin:0 0 12px}.indoor-status{position:absolute;z-index:2;left:18px;bottom:55px;background:#142d29e8;color:#b6ebcf;border:1px solid #579777;border-radius:6px;padding:8px 12px;font-size:11px;pointer-events:none}.indoor-status[hidden]{display:none}.device-heading select{max-width:100%}.device-heading>div:last-child{min-width:0;flex:1}
 
 .canvas-wrap:not([data-geo-stage=campus]) .indoor-status{display:none}@media(max-width:640px){.terminal .device-heading,.terminal .connection{float:none;width:100%}.ue-location{margin-top:6px}.indoor-status{font-size:10px;left:12px;padding:6px 8px;max-width:calc(100% - 24px)}}
+
+.boundary-flow{margin-top:16px;padding:12px;background:#152a30;border:1px solid #29454b;border-radius:6px;font-size:12px;line-height:1.7}.boundary-flow>b,.boundary-flow>span{display:block}.boundary-flow>span{color:#a6dfbf}.boundary-flow small{display:block;color:#8ba3ad;margin-top:6px}#flowEvents{min-height:48px;color:#b3c5ce;font-size:11px;margin:6px 0}button:disabled{opacity:.45;cursor:default}@media(max-width:640px){.boundary-flow{grid-column:1/-1}}
